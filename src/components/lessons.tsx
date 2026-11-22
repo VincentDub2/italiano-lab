@@ -1,9 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowLeft, BookOpen, Clock3 } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import type { StudentLesson } from '@/server/proactive-lessons';
 import { romeDay } from '@/lib/revision';
 import { Sessions } from './sessions';
@@ -29,8 +28,7 @@ async function lessonApi<T>(path: string, body?: unknown): Promise<T> {
  return response.json();
 }
 
-function LessonActions({lesson,refresh,preview=false}: {lesson:StudentLesson;refresh:()=>Promise<void>;preview?:boolean}) {
- const router = useRouter();
+function LessonActions({lesson,refresh}: {lesson:StudentLesson;refresh:()=>Promise<void>}) {
  const pendingKey = useRef<Partial<Record<'start'|'dismiss',string>>>({});
  const busy = useRef(false);
  const [saving,setSaving] = useState(false);
@@ -43,7 +41,6 @@ function LessonActions({lesson,refresh,preview=false}: {lesson:StudentLesson;ref
   try {
    const key = pendingKey.current[action] ??= crypto.randomUUID();
    await lessonApi('lesson-action',{lessonId:lesson.id,requestId:key,action});
-   if (action==='start' && !preview) router.push(lessonHref(lesson.id));
    await refresh();
   } catch {
    setError('Action indisponible. Actualisez la leçon, puis réessayez.');
@@ -56,10 +53,8 @@ function LessonActions({lesson,refresh,preview=false}: {lesson:StudentLesson;ref
  return <div className="mt-2 flex flex-wrap items-center gap-2">
   {lesson.status==='advised' && <>
    {lesson.canStart && <Button type="button" disabled={saving} onClick={()=>void act('start')}>Commencer</Button>}
-   {!preview && <Button asChild variant="outline"><Link href={lessonHref(lesson.id)}>Voir la leçon</Link></Button>}
    <Button type="button" variant="ghost" disabled={saving} onClick={()=>void act('dismiss')}>Pas maintenant</Button>
   </>}
-  {lesson.status==='in_progress' && !preview && <Button asChild><Link href={lessonHref(lesson.id)}>Reprendre</Link></Button>}
   {error && <p role="alert" className="basis-full text-sm text-destructive">{error}</p>}
  </div>;
 }
@@ -82,7 +77,7 @@ function LessonDates({lesson}: {lesson:StudentLesson}) {
  </section>;
 }
 
-export function Lessons({today=false,lessonId}: {today?:boolean;lessonId?:string}) {
+export function Lessons({lessonId}: {lessonId?:string}) {
  const [lessons,setLessons] = useState<StudentLesson[] | null>(null);
  const [error,setError] = useState(false);
  const refresh = useCallback(async()=>{
@@ -103,24 +98,6 @@ export function Lessons({today=false,lessonId}: {today?:boolean;lessonId?:string
  </div>;
  const loading = !lessons && !error && <p role="status" className="text-sm text-muted-foreground">Chargement des leçons…</p>;
 
- if (today) {
-  const active = lessons?.find(l=>l.status==='in_progress' || l.status==='advised');
-  return <section className="mt-2 mb-8" aria-label="Leçons du professeur">
-   {loading}{loadError}
-   {active && <Card className="gap-3 border-primary/25 bg-accent/40 p-5 shadow-none sm:p-6">
-    <div className="flex items-center gap-2 text-sm font-semibold text-primary"><BookOpen className="size-4" aria-hidden="true"/>Leçon conseillée par le prof</div>
-    <h2 className="m-0 text-2xl wrap-anywhere">{active.title}</h2>
-    <p className="m-0 text-sm leading-relaxed text-muted-foreground wrap-anywhere">{active.reason}</p>
-    <div className="flex flex-wrap items-center gap-3 text-sm">
-     <span className="inline-flex items-center gap-1.5 text-muted-foreground"><Clock3 className="size-4" aria-hidden="true"/>Environ {active.minutes} min</span>
-     <Badge variant="outline">{lessonState(active)}</Badge>
-    </div>
-    <LessonActions key={active.id} lesson={active} refresh={refresh}/>
-   </Card>}
-   {lessons && <Button asChild variant="outline" className={active?'mt-3':undefined}><Link href="/lecons">Mes leçons</Link></Button>}
-  </section>;
- }
-
  const lesson = lessonId ? lessons?.[0] : undefined;
  if (lessonId) return <div className="mt-6">
   <Button asChild variant="ghost" className="mb-5"><Link href="/lecons"><ArrowLeft aria-hidden="true"/>Mes leçons</Link></Button>
@@ -130,7 +107,7 @@ export function Lessons({today=false,lessonId}: {today?:boolean;lessonId?:string
    <p className="mb-4 text-muted-foreground wrap-anywhere">{lesson.objective}</p>
    <p className="mb-4 wrap-anywhere">{lesson.reason}</p>
    <div role="status"><Badge variant="outline">{lessonState(lesson)}</Badge></div>
-   {lesson.status==='advised' && <LessonActions key={lesson.id} lesson={lesson} refresh={refresh} preview/>}
+   {lesson.status==='advised' && <LessonActions key={lesson.id} lesson={lesson} refresh={refresh}/>}
    <LessonDates lesson={lesson}/>
    {lesson.status!=='dismissed' && <Sessions lesson={lesson} onLessonRefresh={refresh}/>}
   </>}

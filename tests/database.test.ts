@@ -18,7 +18,7 @@ test('migrations SQLite répétables, persistance, clés étrangères et rollbac
     db.close();
     db = openDatabase(path);
     assert.equal(db.prepare('SELECT COUNT(*) AS n FROM vocabulary').get()?.n, 1);
-    assert.equal(db.prepare('SELECT COUNT(*) AS n FROM schema_migrations').get()?.n, 11);
+    assert.equal(db.prepare('SELECT COUNT(*) AS n FROM schema_migrations').get()?.n, 12);
     db.close();
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });

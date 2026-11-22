@@ -57,7 +57,8 @@ export function nextLessonMilestones(d: Database, at = new Date()) {
  const laterDue = d.prepare(`SELECT id,step,due_date AS date FROM proactive_milestones
   WHERE lesson_id=? AND step>? AND due_date<=? AND completed_at IS NULL ORDER BY step`);
  return rows.map(m=>({...m,timing:m.date===today?'today':m.date<today?'overdue':'upcoming',
-  scheduledIn:coverage.all(m.id),laterDue:laterDue.all(m.lessonId,m.step,today)}));
+  scheduledIn:coverage.all(m.id) as {sessionId:string;date:string}[],
+  laterDue:laterDue.all(m.lessonId,m.step,today) as {id:string;step:number;date:string}[]}));
 }
 
 export function validateRevisionPublication(d: Database, session: {id:string;scheduled_date:string}) {

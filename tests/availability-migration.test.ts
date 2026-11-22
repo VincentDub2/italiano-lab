@@ -14,7 +14,7 @@ import { journal } from '../src/server/learning';
 
 const proactiveTables = ['learning_observations','proactive_lessons','proactive_lesson_evidence',
  'proactive_milestones','proactive_revision_links','proactive_milestone_attempts'];
-const emptyV11 = Object.fromEntries(proactiveTables.map(name=>[name,[]]));
+const emptyV12 = {...Object.fromEntries(proactiveTables.map(name=>[name,[]])),correction_reads:[]};
 
 function snapshot(d: Database, omitAvailability = false) {
  const result: Record<string, unknown> = {};
@@ -41,8 +41,8 @@ for (const legacy of [true, false]) test(`V6 ${legacy ? 'ancienne' : 'actuelle'}
   if (!legacy) old.exec("UPDATE bank_items SET available=0 WHERE id='published-item'");
   const before = snapshot(old, legacy);
   const migrated = openDatabase(path);
-  assert.deepEqual(snapshot(migrated, legacy), { ...before, sentence_attempts: [], session_takeaways: [], session_difficulty: [], ...emptyV11 });
-  assert.equal(migrated.prepare('SELECT MAX(version) AS n FROM schema_migrations').get()?.n, 11);
+  assert.deepEqual(snapshot(migrated, legacy), { ...before, sentence_attempts: [], session_takeaways: [], session_difficulty: [], ...emptyV12 });
+  assert.equal(migrated.prepare('SELECT MAX(version) AS n FROM schema_migrations').get()?.n, 12);
   assert.equal(migrated.prepare('PRAGMA foreign_keys').get()?.foreign_keys, 1);
   assert.deepEqual(migrated.prepare('PRAGMA foreign_key_check').all(), []);
   assert.equal(migrated.prepare('PRAGMA integrity_check').get()?.integrity_check, 'ok');
@@ -88,7 +88,7 @@ test('V7 : échec après ALTER TABLE annule schéma et données, sauvegarde rest
   const restored = new DatabaseSync(join(dir, backups[0]));
   assert.deepEqual(snapshot(restored), before); restored.close();
   const retry = openDatabase(path);
-  assert.equal(retry.prepare('SELECT MAX(version) AS n FROM schema_migrations').get()?.n, 11);
+  assert.equal(retry.prepare('SELECT MAX(version) AS n FROM schema_migrations').get()?.n, 12);
   retry.close();
  } finally { rmSync(dir, { recursive: true, force: true }); }
 });
@@ -98,7 +98,7 @@ test('base neuve : V7 conserve le schéma V6 actuel sans sauvegarde inutile', ()
  const dir = mkdtempSync(join(tmpdir(), 'italiano-v7-new-'));
  try {
   const d = openDatabase(join(dir, 'db.sqlite'));
-  assert.equal(d.prepare('SELECT MAX(version) AS n FROM schema_migrations').get()?.n, 11);
+  assert.equal(d.prepare('SELECT MAX(version) AS n FROM schema_migrations').get()?.n, 12);
   const available = d.prepare('PRAGMA table_info(bank_items)').all().find((c: { name: string }) => c.name === 'available');
   assert.equal(available?.dflt_value, '1');
   assert.equal(available?.notnull, 1);
@@ -131,7 +131,7 @@ test('V8 : la migration depuis V7 conserve les données et sauvegarde le schéma
   const before = snapshot(v7);
   v7.close();
   const upgraded = openDatabase(path);
-  assert.deepEqual(snapshot(upgraded), {...before,sentence_attempts:[],session_takeaways:[],session_difficulty:[],...emptyV11});
+  assert.deepEqual(snapshot(upgraded), {...before,sentence_attempts:[],session_takeaways:[],session_difficulty:[],...emptyV12});
   assert.deepEqual(upgraded.prepare('PRAGMA foreign_key_check').all(), []);
   upgraded.close();
   const backups = readdirSync(dir).filter(name => name.includes('.before-sentences-'));
@@ -155,6 +155,7 @@ test('V9 : les anciennes séances gardent leurs réponses et leurs clés de cré
   const input = { requestId:'legacy-mutation', title:'Ancien brouillon', objective:'Saluer', scheduledDate:'2026-01-01', exercises:[{instruction:'Complétez',content:'___ Marco',answer:{accepted:['ciao']},type:'cloze'}] };
   const draft = createSession(input);
   const v8 = openDatabase(path);
+  v8.exec('DROP TABLE correction_reads');
   for (const name of [...proactiveTables].reverse()) v8.exec(`DROP TABLE ${name}`);
   v8.exec('DROP INDEX learning_attempts_by_version; DROP INDEX sentence_attempts_by_scope; DROP TABLE session_difficulty; DROP TABLE session_takeaways; DELETE FROM schema_migrations WHERE version>=9;');
   v8.prepare('UPDATE learning_mutations SET payload_json=? WHERE request_id=?').run(JSON.stringify({...input,source:'prof'}),input.requestId);
@@ -162,8 +163,8 @@ test('V9 : les anciennes séances gardent leurs réponses et leurs clés de cré
   v8.close();
 
   const upgraded = openDatabase(path);
-  assert.equal(upgraded.prepare('SELECT MAX(version) AS n FROM schema_migrations').get()?.n, 11);
-  assert.deepEqual(snapshot(upgraded), {...before,session_takeaways:[],session_difficulty:[],...emptyV11});
+  assert.equal(upgraded.prepare('SELECT MAX(version) AS n FROM schema_migrations').get()?.n, 12);
+  assert.deepEqual(snapshot(upgraded), {...before,session_takeaways:[],session_difficulty:[],...emptyV12});
   upgraded.close();
   const session = getSession('published', true);
   assert.deepEqual(session.takeaways, []);
@@ -200,7 +201,7 @@ test('V6 ancienne : dailyPlan et journal retrouvent seulement les items exposés
   assert.deepEqual(d.prepare('SELECT id,available FROM bank_items ORDER BY id').all().map((r: { id: string; available: number }) => [r.id, r.available]), [
    ['draft-item', 0], ['legacy:series:practice-only', 1], ['practiced-draft', 1], ['published-item', 1], ['standalone', 0],
   ]);
-  assert.equal(d.prepare('SELECT MAX(version) AS n FROM schema_migrations').get()?.n, 11);
+  assert.equal(d.prepare('SELECT MAX(version) AS n FROM schema_migrations').get()?.n, 12);
   assert.throws(() => d.exec("UPDATE bank_items SET available=2 WHERE id='draft-item'"), /CHECK constraint failed/);
   d.close();
   const created = createBankExercise({ requestId: 'after-v7', exercise: { type: 'cloze', instruction: 'Complétez', items: [{ content: 'Nouveau ___', answer: { accepted: ['ciao'] } }] } });
@@ -219,14 +220,15 @@ test('V11 additive depuis V10 : séances, tentatives, difficulté et suivi conse
  try {
   createV6(path).close();
   const historical=openDatabase(path);
+  historical.exec('DROP TABLE correction_reads');
   for (const name of [...proactiveTables].reverse()) historical.exec(`DROP TABLE ${name}`);
-  historical.exec("DROP INDEX learning_attempts_by_version; DROP INDEX sentence_attempts_by_scope; DELETE FROM schema_migrations WHERE version=11; INSERT INTO session_difficulty VALUES ('published','just_right')");
+  historical.exec("DROP INDEX learning_attempts_by_version; DROP INDEX sentence_attempts_by_scope; DELETE FROM schema_migrations WHERE version>=11; INSERT INTO session_difficulty VALUES ('published','just_right')");
   const before=snapshot(historical);
   historical.close();
   for (let pass=0;pass<2;pass++) {
    const migrated=openDatabase(path);
-   assert.deepEqual(snapshot(migrated),{...before,...emptyV11});
-   assert.equal(migrated.prepare('SELECT MAX(version) AS n FROM schema_migrations').get()?.n,11);
+   assert.deepEqual(snapshot(migrated),{...before,...emptyV12});
+   assert.equal(migrated.prepare('SELECT MAX(version) AS n FROM schema_migrations').get()?.n,12);
    assert.deepEqual(migrated.prepare('PRAGMA foreign_key_check').all(),[]);
    migrated.close();
   }
@@ -236,5 +238,25 @@ test('V11 additive depuis V10 : séances, tentatives, difficulté et suivi conse
   assert.equal(backup.prepare('SELECT MAX(version) AS n FROM schema_migrations').get()?.n,10);
   assert.deepEqual(snapshot(backup),before);
   backup.close();
+ } finally {rmSync(dir,{recursive:true,force:true});}
+});
+
+test('V12 depuis V11 conserve l’historique et part sans accusé de lecture',()=>{
+ const dir=mkdtempSync(join(tmpdir(),'italiano-v11-backup-'));
+ const path=join(dir,'db.sqlite');
+ try {
+  createV6(path).close();
+  const previous=openDatabase(path);
+  previous.exec("DROP TABLE correction_reads; DELETE FROM schema_migrations WHERE version=12");
+  const before=snapshot(previous);
+  previous.close();
+  for (let pass=0;pass<2;pass++) {
+   const migrated=openDatabase(path);
+   assert.deepEqual(snapshot(migrated),{...before,correction_reads:[]});
+   assert.equal(migrated.prepare('SELECT MAX(version) AS n FROM schema_migrations').get()?.n,12);
+   assert.deepEqual(migrated.prepare('PRAGMA foreign_key_check').all(),[]);
+   migrated.close();
+  }
+  assert.equal(readdirSync(dir).filter(name=>name.includes('.before-correction-reads-')).length,1);
  } finally {rmSync(dir,{recursive:true,force:true});}
 });

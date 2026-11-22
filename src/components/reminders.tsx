@@ -101,10 +101,17 @@ function ReminderCalendar({ reminders }: { reminders: Reminder[] }) {
   </Card>;
 }
 
-export function Reminders() {
+export function Reminders({revision=0}:{revision?:number}) {
   const [result, setResult] = useState<CombinedCalendar | null>(null);
   const [error, setError] = useState(false);
-  useEffect(() => { fetch('/api/revision-calendar', { cache: 'no-store' }).then(r => { if (!r.ok) throw new Error(); return r.json(); }).then(setResult).catch(() => setError(true)); }, []);
+  useEffect(() => {
+    const controller=new AbortController();
+    fetch('/api/revision-calendar',{cache:'no-store',signal:controller.signal})
+      .then(r=>{if (!r.ok) throw new Error(); return r.json();})
+      .then(data=>{if (!controller.signal.aborted) {setResult(data);setError(false);}})
+      .catch(()=>{if (!controller.signal.aborted) setError(true);});
+    return ()=>controller.abort();
+  },[revision]);
   return <section className="mt-10" aria-labelledby="reminders-title">
     <div className="mb-6 border-t border-border pt-9"><div className="mb-3 text-[10px] font-bold tracking-[.18em] text-ring">VOTRE CALENDRIER</div><h2 id="reminders-title" className="mb-3">Rappels thématiques</h2><p className="m-0 max-w-xl text-sm text-muted-foreground">Retrouvez vos révisions par thème. Sélectionnez une date pour voir les rappels du jour.</p></div>
     {error ? <p role="alert" className="rounded-lg border border-border bg-card p-6 text-sm">Calendrier des rappels indisponible ou données invalides.</p> : !result ? <div role="status" className="min-h-80 rounded-xl border border-border bg-card p-6 text-sm text-muted-foreground">Chargement des rappels…</div> : <>

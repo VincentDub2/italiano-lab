@@ -8,7 +8,7 @@ import { stateLabels } from '@/lib/revision';
 import type { Answer, Exercise, SentenceDraft } from '@/lib/exercises';
 
 type Props = {
- headingLevel?:3|4; items:Exercise[]; scopeId:string; busy:boolean;
+ headingLevel?:3|4; initialItemId?:string; items:Exercise[]; scopeId:string; busy:boolean;
  completion?:ReactNode;
  onSubmit:(item:Exercise,answer:string,mode?:'translation')=>Promise<boolean>;
  onReveal:(item:Exercise)=>Promise<{italian:string;example:string}>;
@@ -18,8 +18,11 @@ type Props = {
 function needsWork(item: Exercise) {
  return !item.latestAttempt || Boolean(item.needsAttempt && item.latestAttempt.status !== 'pending_teacher');
 }
-export function StudyRunner({items,scopeId,busy,onSubmit,onReveal,onSentenceSubmit,onHint,headingLevel=3,completion}:Props) {
- const [presentation,setPresentation] = useState(() => ({ id:(items.find(needsWork) || items.find(x=>x.latestAttempt?.status==='pending_teacher') || items[0])?.id, before:'', retry:false }));
+function canWork(item: Exercise) {
+ return needsWork(item) && !item.alreadyReviewed && !item.revision?.pending;
+}
+export function StudyRunner({items,initialItemId,scopeId,busy,onSubmit,onReveal,onSentenceSubmit,onHint,headingLevel=3,completion}:Props) {
+ const [presentation,setPresentation] = useState(() => ({ id:(items.find(item=>item.id===initialItemId && canWork(item)) || items.find(canWork) || items.find(x=>x.latestAttempt?.status==='pending_teacher') || items[0])?.id, before:'', retry:false }));
  const [finished,setFinished] = useState(false);
  const [reviewId,setReviewId] = useState<string | null>(null);
  const title = useRef<HTMLDivElement>(null);
@@ -36,7 +39,7 @@ export function StudyRunner({items,scopeId,busy,onSubmit,onReveal,onSentenceSubm
    return;
   }
   const retry = items.find(item => item.retryReady && !(item.id === current?.id && freshRetry));
-  const pending = retry || items.find(item => needsWork(item) && item.id!==current?.id && !item.alreadyReviewed && !item.revision?.pending);
+  const pending = retry || items.find(item => item.id!==current?.id && canWork(item));
   if (!pending) { setFinished(true); return; }
   setPresentation({ id:pending.id, before:pending.latestAttempt?.id || '', retry:!!retry });
  };

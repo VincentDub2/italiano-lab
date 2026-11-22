@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { openDatabase } from './database.mjs';
 import { normalizeAnswer } from '../lib/answers';
 import type { Answer, ExerciseType, Sentence } from '../lib/exercises';
-import { calculateReview, romeDay, type ReviewEvent } from '../lib/revision';
+import { calculateReview, romeDay, type ReviewEvent, type RevisionState } from '../lib/revision';
 import { write, type Database } from './store';
 import { id, isTokenOrder, sentenceSchema } from './schemas';
 
@@ -80,13 +80,16 @@ export function attemptResult(d: Database, a: LearningAttempt) {
  const progress = sentence && readDraft(d,a.context,a.request_id);
  return { question, instruction:version.instruction, answerLabel, id: a.id, exercise_id: a.occurrence_id || a.question_id, item_id: a.item_id, version_id: a.version_id, request_id: a.request_id, answer: a.answer, status: a.status, is_correct: a.is_correct, submitted_at: a.submitted_at, reviewed_at: a.reviewed_at, assisted: a.assisted === null ? null : Boolean(a.assisted), context: a.context, mode: a.mode, feedback: a.feedback_json ? JSON.parse(a.feedback_json) : null, neutralized: rectifications.length > 0, rectifications, ...(replies ? {replies} : {}), ...(progress ? {retryOf:progress.retry_of,hintCount:progress.hint_count} : {}), ...(a.content ? { content: a.content, title: a.title } : {}), ...(a.status === 'self_assessed' ? { interval: { again:600000, hard:86400000, good:259200000, easy:604800000 }[a.answer.trim()] } : {}) };
 }
+export function hasReviewedToday(d: Database, item: ItemRow, revision: RevisionState, today: string) {
+ if (!revision.due || revision.due<=today) return false;
+ const successes = d.prepare('SELECT a.submitted_at FROM learning_attempts a JOIN item_versions v ON v.id=a.version_id WHERE a.item_id=? AND v.cycle_id=? AND a.is_correct=1 AND a.assisted=0 AND NOT EXISTS(SELECT 1 FROM feedback_rectifications f WHERE f.attempt_id=a.id)').all(item.item_id,item.cycle_id) as {submitted_at:string}[];
+ return successes.some(a => romeDay(a.submitted_at) === today);
+}
 export function publicItem(d: Database, item: ItemRow, occurrenceId = item.item_id, practice = false) {
  const revision = reviewFor(d, item);
  const choices = item.choices_json ? JSON.parse(item.choices_json) as {value: string; label: string}[] : null;
  const notions = d.prepare('SELECT n.id,n.name FROM notions n JOIN item_notions x ON x.notion_id=n.id WHERE x.item_id=? ORDER BY n.name').all(item.item_id) as {id: string; name: string}[];
- const today = romeDay();
- const successes = d.prepare('SELECT a.submitted_at FROM learning_attempts a JOIN item_versions v ON v.id=a.version_id WHERE a.item_id=? AND v.cycle_id=? AND a.is_correct=1 AND a.assisted=0 AND NOT EXISTS(SELECT 1 FROM feedback_rectifications f WHERE f.attempt_id=a.id)').all(item.item_id,item.cycle_id) as {submitted_at:string}[];
- const alreadyReviewed = revision.due !== null && revision.due > today && successes.some(a => romeDay(a.submitted_at) === today);
+ const alreadyReviewed = hasReviewedToday(d,item,revision,romeDay());
  return { id: occurrenceId, item_id: item.item_id, version_id: item.id, group_id: item.group_id, type: item.type, instruction: item.instruction, content: item.content, objective: item.objective, origin_id: item.origin_id, notions, revision, alreadyReviewed, ...(choices ? { choices: choices.map((choice, i) => ({ value: practice ? String(i) : choice.value, label: choice.label })) } : {}), ...(item.type === 'sentence' ? { sentence: publicSentence(sentenceDefinition(item)) } : {}) };
 }
 function presentationAttempts(d: Database, presentation: Presentation, all = false) {
@@ -221,13 +224,13 @@ export function learningOverview(at = new Date(), existing?: Database) {
   return { today, workedSeconds, targetSeconds, remainingSeconds: Math.max(0,targetSeconds-workedSeconds), dailyComplete: workedSeconds >= targetSeconds, due: items.filter(x => !x.revision.pending && x.revision.due && x.revision.due <= today).length, items };
  } finally { if (!existing) d.close(); }
 }
-export function selectItems(d: Database, options: { count: number; itemIds?: string[]; voluntary?: boolean }) {
+export function selectItems(d: Database, options: { count: number; itemIds?: string[]; voluntary?: boolean }, at = new Date()) {
  const rows = bankRows(d).filter(item => !options.itemIds || options.itemIds.includes(item.item_id));
  if (options.itemIds?.some(id => !rows.some(row => row.item_id === id))) throw new Error('Item de banque inconnu.');
- const today = romeDay();
+ const today = romeDay(at);
  const available = rows.map(item => ({ item, review:reviewFor(d,item), errors:Number(d.prepare("SELECT COUNT(*) AS n FROM learning_attempts a WHERE item_id=? AND (is_correct=0 OR (status='corrected' AND is_correct IS NULL)) AND NOT EXISTS(SELECT 1 FROM feedback_rectifications f WHERE f.attempt_id=a.id)").get(item.item_id)?.n || 0) })).filter(x => !x.review.pending && (options.voluntary || !x.review.due || x.review.due <= today));
  available.sort((a,b) => Number(!a.review.due) - Number(!b.review.due) || (a.review.due || '').localeCompare(b.review.due || '') || Number(b.review.state === 'rework') - Number(a.review.state === 'rework') || b.errors-a.errors || Number(!!b.item.origin_id)-Number(!!a.item.origin_id));
- let remaining = options.voluntary ? Infinity : learningOverview(new Date(),d).remainingSeconds;
+ let remaining = options.voluntary ? Infinity : learningOverview(at,d).remainingSeconds;
  let newItems = 0;
  const selected: ItemRow[] = [];
  for (const {item,review} of available) {

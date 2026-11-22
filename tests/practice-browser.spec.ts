@@ -25,7 +25,7 @@ test('banque → séance → erreur → nouvel essai après trois items → carn
   await expect(page.getByText('Nouvel essai après correction.',{exact:false})).toBeVisible();
   await page.getByRole('textbox',{name:'Votre réponse',exact:true}).fill('ciao');await page.getByRole('button',{name:'Envoyer',exact:true}).click();await expect(page.getByText('Réponse après aide ou correction : entraînement enregistré, consolidation inchangée.',{exact:true})).toBeVisible();
   const journal=await call('get_error_journal',{});const item=journal.items.find((x:{item_id:string})=>x.item_id===group.itemIds[0]);expect(item.history).toHaveLength(2);expect(item.revision.successes).toBe(0);expect(item.history[0].answer).toBe('salut');
-  await page.getByRole('navigation',{name:'Navigation principale'}).getByRole('button',{name:'Carnet d’erreurs',exact:true}).click();await page.getByRole('textbox',{name:'Notion',exact:true}).fill(notion);
+  await page.getByRole('navigation',{name:'Autres espaces'}).getByRole('link',{name:'Carnet d’erreurs',exact:true}).click();await page.getByRole('textbox',{name:'Notion',exact:true}).fill(notion);
   await expect(page.getByRole('heading',{name:'1. ___ Marco!',exact:true})).toBeVisible();await expect(page.getByText('Historique des tentatives (2)',{exact:true})).toBeVisible();
   for(const width of [320,768,1024,1440]) {await page.setViewportSize({width,height:1000});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);}
   await page.setViewportSize({width:1440,height:1000});await page.getByRole('region',{name:'Carnet d’erreurs',exact:true}).screenshot({path:'artifacts/error-journal-desktop.png'});

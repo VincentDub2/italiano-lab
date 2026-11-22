@@ -124,6 +124,11 @@ function studentLesson(d: Database, l: Lesson, at = new Date()) {
  };
 }
 
+export function activeStudentLesson(d: Database, at: Date) {
+ const row = d.prepare(lessonSelect+" WHERE l.status IN ('advised','in_progress')").get() as Lesson | undefined;
+ return row && {...studentLesson(d,row,at),startedAt:row.started_at};
+}
+
 export type StudentLesson = ReturnType<typeof studentLesson>;
 export function getStudentLesson(lessonId: string) {
  id.parse(lessonId);

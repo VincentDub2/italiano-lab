@@ -18,7 +18,7 @@ async function api<T>(action:string, body?:unknown):Promise<T> {
  if (!response.ok) throw new Error('Opération impossible. Réessayez.');
  return response.json();
 }
-export function Practice({itemIds}:{itemIds?:string[]}) {
+export function Practice({itemIds,suggested=false}:{itemIds?:string[];suggested?:boolean}) {
  const [bank,setBank] = useState<Bank | null>(null);
  const [series,setSeries] = useState<Series | null>(null);
  const [count,setCount] = useState(10);
@@ -39,7 +39,7 @@ export function Practice({itemIds}:{itemIds?:string[]}) {
     let saved:StartRequest | null = null;
     if (!itemIds) { try { saved = JSON.parse(sessionStorage.getItem(activeKey) || 'null'); } catch {} }
     if (itemIds) saved = {requestId:crypto.randomUUID(),count:itemIds.length,itemIds,voluntary:true};
-    if (saved && typeof saved.requestId === 'string' && Number.isInteger(saved.count)) {
+    if (saved && (!suggested || !saved.voluntary && !saved.itemIds) && typeof saved.requestId === 'string' && Number.isInteger(saved.count)) {
      const resumed = await api<Series>('practice-start',saved);
      if (!cancelled) {setSeries(resumed);try {sessionStorage.setItem(activeKey,JSON.stringify(saved));} catch {}}
     }
@@ -48,7 +48,7 @@ export function Practice({itemIds}:{itemIds?:string[]}) {
   }
   void load();
   return () => { cancelled = true; };
- },[itemIds]);
+ },[itemIds,suggested]);
  const run = async (action:()=>Promise<void>) => {
   if (lock.current) return false;
   lock.current = true; setBusy(true); setError('');

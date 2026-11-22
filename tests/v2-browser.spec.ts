@@ -117,7 +117,7 @@ test('séance : cartes, trous, correction différée et reprise sans écraser le
   await page.getByRole('button',{name:'Actualiser',exact:true}).click();await expect(page.locator('.exercise-feedback')).toContainText('Sono pronto.');
   await page.reload();await page.getByRole('button',{name:'Toutes les séances',exact:true}).click();await page.getByRole('button',{name:new RegExp(title)}).click();
   await expect(page.getByRole('heading',{name:'Carte test',exact:true})).toBeVisible();
-  await page.getByRole('navigation',{name:'Navigation principale'}).getByRole('button',{name:'Carnet d’erreurs',exact:true}).click();
+  await page.getByRole('navigation',{name:'Autres espaces'}).getByRole('link',{name:'Carnet d’erreurs',exact:true}).click();
   await expect(page.getByRole('heading',{name:'Carnet d’erreurs',exact:true})).toBeVisible();
   await expect(page.getByText('Accent italien.',{exact:true})).toBeVisible();
  } finally {await client.close();}

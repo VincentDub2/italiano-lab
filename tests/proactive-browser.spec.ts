@@ -94,14 +94,24 @@ test('du signal MCP au jalon réellement effectué dans Next.js',async({page,req
 
   await page.setViewportSize({width:390,height:844});
   await page.goto(base);
-  const advice=page.getByRole('region',{name:'Leçons du professeur'});
-  await expect(advice.getByRole('heading',{name:title})).toBeVisible();
+  const primary=page.getByRole('region',{name:'À faire maintenant'});
+  const other=page.getByRole('region',{name:'Autres actions'});
+  const advice=other.getByRole('link',{name:new RegExp(title)});
+  await expect(advice).toBeVisible();
+  await expect(primary.getByRole('link',{name:'Lire la correction'})).toBeVisible();
   await expect(page.getByRole('region',{name:'Votre pratique'}).getByText(title,{exact:true})).toHaveCount(0);
-  await advice.getByRole('link',{name:'Voir la leçon'}).click();
+  await advice.click();
   await expect(page.getByText('Pioveva quando sono uscito.')).toBeVisible();
   await expect(page.getByRole('textbox')).toHaveCount(0);
   expect((await call('get_proactive_lesson',{lessonId:advised.id})).milestones).toEqual([]);
-  const start=page.getByRole('button',{name:'Commencer',exact:true});
+  for (const attemptId of evidenceAttemptIds) {
+   const detail=await (await request.get(base+'/api/correction?id='+attemptId)).json();
+   expect((await request.post(base+'/api/correction-read',{headers:{origin:base},data:{attemptId,version:detail.version}})).ok()).toBe(true);
+  }
+  await page.goBack();
+  const start=primary.getByRole('button',{name:'Commencer la leçon',exact:true});
+  await expect(start).toBeVisible();
+  await expect(primary).toContainText('Les deux récits mélangent les temps.');
   await start.focus();
   await page.keyboard.press('Enter');
   const work = page.getByRole('region',{name:'Contenu de la leçon'});
@@ -113,6 +123,11 @@ test('du signal MCP au jalon réellement effectué dans Next.js',async({page,req
   await work.getByRole('textbox',{name:'Votre phrase'}).fill('Pioveva e ho cambiato treno.');
   await work.getByRole('button',{name:'Envoyer au professeur'}).click();
   await expect(page.getByText('En attente de correction',{exact:true})).toBeVisible();
+  await page.getByRole('navigation',{name:'Navigation principale'}).getByRole('link',{name:'Aujourd’hui'}).click();
+  await expect(page.getByRole('list',{name:'Réponses en attente'})).toContainText('En attente de correction');
+  await expect(primary.getByRole('link',{name:'Reprendre la leçon'})).toHaveCount(0);
+  await page.goBack();
+  await expect(work.getByText('En attente du professeur',{exact:false})).toBeVisible();
   const finalId=preview.exercises[1].id;
   const pending=(await call('get_pending_answers',{})).find((a:{exercise_id:string})=>a.exercise_id===finalId);
   expect((await call('get_proactive_lesson',{lessonId:advised.id})).milestones).toEqual([]);
@@ -147,38 +162,6 @@ test('du signal MCP au jalon réellement effectué dans Next.js',async({page,req
   expect(missing.state).toBe('missing');
   expect(missing.reminders).toHaveLength(5);
 
-  const plan=await call('get_daily_plan',{});
-  expect(plan.revisionMilestones[0]).toMatchObject({id:milestone.id,timing:'today'});
-  const extra=await bankItem('item-sans-lien','Ieri ___ in piscina.',true);
-  const target=await bankItem('item-avec-lien','Una volta ___ a teatro in bici.',true);
-  const final=await bankItem('champ-final-quotidien','Racontez une panne pendant un appel.');
-  const daily=await call('compose_session',{requestId:'italiano-daily-'+milestone.date,title:'Une panne pendant un appel',
-   objective:'Employer les deux temps',scheduledDate:milestone.date,itemIds:[extra,target,final],
-   revisionLinks:[{milestoneId:milestone.id,positions:[1]}],
-  });
-  const dailySession=await call('get_session',{sessionId:daily.id});
-  expect(dailySession.revision_links[0].occurrenceIds).toEqual([dailySession.exercises[1].id]);
-  await call('publish_session',{sessionId:daily.id,requestId:'publish-daily'});
-  const readMilestone=async()=>(await call('get_proactive_lesson',{lessonId:advised.id})).milestones[0];
-  expect((await readMilestone()).completedAt).toBeNull();
-  const dailyCard=page.getByRole('button',{name:/Une panne pendant un appel/});
-  await page.reload();
-  await dailyCard.click();
-  const dailyWork=page.getByRole('region',{name:'Votre pratique'});
-  await dailyWork.getByRole('textbox',{name:'Votre réponse'}).fill('sono andato');
-  await dailyWork.getByRole('button',{name:'Envoyer'}).click();
-  await expect(dailyWork.getByText('Correct.',{exact:true})).toBeVisible();
-  expect((await readMilestone()).completedAt).toBeNull();
-  await dailyWork.getByRole('button',{name:'Continuer',exact:true}).click();
-  await dailyWork.getByRole('textbox',{name:'Votre réponse'}).fill('andavo');
-  await dailyWork.getByRole('button',{name:'Envoyer'}).click();
-  await expect(dailyWork.getByText('À revoir.',{exact:true})).toBeVisible();
-  expect(await readMilestone()).toMatchObject({id:milestone.id,result:'needs_work'});
-  await page.goto(base+'/lecons');
-  await expect(page.getByRole('heading',{name:'Mes leçons',exact:true})).toBeVisible();
-  await expect(page.getByText(/Prochaine révision · J3/)).toBeVisible();
-  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
-
   const extraProofIds = [];
   const newNotion = await call('resolve_learning_notion',{requestId:'notion-politesse',name:'Politesse'});
   for (const [i,prompt] of ['Demandez un horaire à la gare.','Demandez un rendez-vous à un collègue.'].entries()) {
@@ -205,9 +188,63 @@ test('du signal MCP au jalon réellement effectué dans Next.js',async({page,req
     examples:[{italian:'Vorrei prenotare.',french:'Je voudrais réserver.'}]}],
   });
   await call('publish_proactive_lesson',{lessonId:optional.id,requestId:'politesse-conseillée'});
+
+  const plan=await call('get_daily_plan',{});
+  expect(plan.revisionMilestones[0]).toMatchObject({id:milestone.id,timing:'today'});
+  const extra=await bankItem('item-sans-lien','Ieri ___ in piscina.',true);
+  const target=await bankItem('item-avec-lien','Una volta ___ a teatro in bici.',true);
+  const final=await bankItem('champ-final-quotidien','Racontez une panne pendant un appel.');
+  const daily=await call('compose_session',{requestId:'italiano-daily-'+milestone.date,title:'Une panne pendant un appel',
+   objective:'Employer les deux temps',scheduledDate:milestone.date,itemIds:[extra,target,final],
+   revisionLinks:[{milestoneId:milestone.id,positions:[1]}],
+  });
+  const dailySession=await call('get_session',{sessionId:daily.id});
+  expect(dailySession.revision_links[0].occurrenceIds).toEqual([dailySession.exercises[1].id]);
+  await call('publish_session',{sessionId:daily.id,requestId:'publish-daily'});
+  const readMilestone=async()=>(await call('get_proactive_lesson',{lessonId:advised.id})).milestones[0];
+  expect((await readMilestone()).completedAt).toBeNull();
+  await page.reload();
+  const revision=primary.getByRole('link',{name:'Travailler le J1'});
+  await expect(revision).toBeVisible();
+  await expect(primary.locator('[data-variant="default"]')).toHaveCount(1);
+  await expect(other.getByRole('link',{name:/Demander poliment/})).toBeVisible();
+  const unread=other.getByRole('link',{name:/Lire la correction/});
+  await expect(unread).toBeVisible();
+  await unread.click();
+  await expect(page.getByRole('heading',{name:'Correction',exact:true})).toBeVisible();
+  await expect(page.getByText('Pioveva e ho cambiato treno.',{exact:true}).first()).toBeVisible();
+  await page.getByRole('button',{name:'Marquer comme lue'}).click();
+  await expect(page.getByText('Correction lue',{exact:true})).toBeVisible();
+  await page.reload();
+  await expect(page.getByText('Correction lue',{exact:true})).toBeVisible();
+  await call('rectify_feedback',{requestId:'rectification-lue-v2a',attemptId:pending.id,
+   correction:'Pioveva e ho cambiato treno.',explanation:'Le retour précédent demandait une précision.'});
+  await page.reload();
+  await expect(page.getByRole('button',{name:'Marquer comme lue'})).toBeVisible();
+  expect((await readMilestone()).date).toBe(milestone.date);
+  await page.getByRole('link',{name:'Retour à Aujourd’hui'}).click();
+  await revision.focus();
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveURL(new RegExp('/seances/'+daily.id+'\\?item='));
+  const dailyWork=page.getByRole('region',{name:'Votre pratique'});
+  await expect(dailyWork.getByText('Item 2 / 3',{exact:true})).toBeVisible();
+  await page.reload();
+  await expect(dailyWork.getByText('Item 2 / 3',{exact:true})).toBeVisible();
+  expect((await submit(request,dailySession.exercises[0].id,'non-lie-v2a','sono andato')).ok()).toBe(true);
+  expect((await readMilestone()).completedAt).toBeNull();
+  await dailyWork.getByRole('textbox',{name:'Votre réponse'}).fill('andavo');
+  await dailyWork.getByRole('button',{name:'Envoyer'}).click();
+  await expect(dailyWork.getByText('À revoir.',{exact:true})).toBeVisible();
+  expect(await readMilestone()).toMatchObject({id:milestone.id,result:'needs_work'});
+  await page.goto(base+'/lecons');
+  await expect(page.getByRole('heading',{name:'Mes leçons',exact:true})).toBeVisible();
+  await expect(page.getByText(/Prochaine révision · J3/)).toBeVisible();
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+
   await page.goto(base);
-  await advice.getByRole('button',{name:'Pas maintenant'}).click();
-  await expect(advice.getByRole('heading',{name:'Demander poliment'})).toHaveCount(0);
+  await other.getByRole('link',{name:/Demander poliment/}).click();
+  await page.getByRole('button',{name:'Pas maintenant'}).click();
+  await expect(page.getByText('Écartée',{exact:true})).toBeVisible();
   expect(await call('get_proactive_lesson',{lessonId:optional.id})).toMatchObject({status:'dismissed',milestones:[]});
  } finally {
   await connection.client.close();

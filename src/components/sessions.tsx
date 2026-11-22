@@ -1,9 +1,9 @@
 'use client';
-import { AttemptRectifications } from './attempt-rectifications';
+import Link from 'next/link';
+import { WrittenCorrection } from './correction-detail';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowLeft, ArrowRight, BookOpen, CalendarDays, RefreshCw } from 'lucide-react';
 import { StudyRunner } from '@/components/study-runner';
-import { SentenceFeedback } from '@/components/sentence-exercise';
 import type { Answer, Attempt, Exercise, SentenceDraft } from '@/lib/exercises';
 import type { StudentLesson } from '@/server/proactive-lessons';
 import type { SessionDifficulty } from '@/server/domain';
@@ -23,15 +23,18 @@ const difficultyChoices: [SessionDifficulty,string][] = [
 async function api(path:string, body?:unknown) {const r=await fetch('/api/'+path,body===undefined?{cache:'no-store'}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}); if(!r.ok) throw new Error('Opération impossible. Réessayez.'); return r.json();}
 const todayRome=()=>new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Rome',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
 const displayDate=(date:string)=>new Intl.DateTimeFormat('fr-FR',{timeZone:'Europe/Rome',day:'numeric',month:'long',year:'numeric'}).format(new Date(date+'T12:00:00Z'));
-export function Sessions({corrections=false,lesson,onLessonRefresh}:{corrections?:boolean;lesson?:StudentLesson;onLessonRefresh?:()=>Promise<void>}) {
+export function Sessions({corrections=false,lesson,onLessonRefresh,onProgress,sessionId,occurrenceId}:{
+ corrections?:boolean;lesson?:StudentLesson;onLessonRefresh?:()=>Promise<void>;onProgress?:()=>Promise<void>;sessionId?:string;occurrenceId?:string;
+}) {
  const [sessions,setSessions]=useState<Session[]>([]); const [selected,setSelected]=useState<Session|null>(null); const [attempts,setAttempts]=useState<Attempt[]>([]); const [error,setError]=useState(''); const [loading,setLoading]=useState(true); const [busy,setBusy]=useState(false); const lock=useRef(false);
  const [showAll,setShowAll]=useState(false);
  const lessonSessionId = lesson?.sessionId;
+ const directSessionId = lessonSessionId ?? sessionId;
  const refresh=useCallback(async()=>{
   if (lessonSessionId) await onLessonRefresh?.();
   else if (corrections) setAttempts(await api('feedback'));
-  else setSessions(await api('sessions'));
- },[corrections,lessonSessionId,onLessonRefresh]);
+  else if (!sessionId) setSessions(await api('sessions'));
+ },[corrections,lessonSessionId,onLessonRefresh,sessionId]);
  const open=useCallback(async(id:string)=>{
   const session:Session=await api('session?id='+encodeURIComponent(id));
   for (const e of session.exercises) {
@@ -45,16 +48,16 @@ export function Sessions({corrections=false,lesson,onLessonRefresh}:{corrections
  },[]);
  useEffect(()=>{
   const timer=setTimeout(()=>{
-   void (lessonSessionId ? open(lessonSessionId) : refresh()).catch(e=>setError(e.message)).finally(()=>setLoading(false));
+   void (directSessionId ? open(directSessionId) : refresh()).catch(e=>setError(e.message)).finally(()=>setLoading(false));
   },0);
   return ()=>clearTimeout(timer);
- },[lessonSessionId,open,refresh]);
+ },[directSessionId,open,refresh]);
  const run=async(fn:()=>Promise<void>)=>{if(lock.current)return false; lock.current=true;setBusy(true);try {setError('');await fn();return true;}catch(e){setError((e as Error).message);return false;}finally{lock.current=false;setBusy(false);}};
- const submit=async(e:Exercise,answer:string,mode?:'translation')=>{const key='italiano-attempt:'+e.id; let pending: {requestId:string;answer:string;mode?:'translation'}|null=null; try {pending=JSON.parse(sessionStorage.getItem(key) || 'null');} catch {} if(!pending) {pending={requestId:crypto.randomUUID(),answer,...(mode ? {mode} : {})};try {sessionStorage.setItem(key,JSON.stringify(pending));} catch {}} if(pending.answer!==answer || pending.mode!==mode) throw new Error('Une réponse est en attente : renvoyez votre réponse précédente.'); await api('attempt',{exerciseId:e.id,...pending}); await Promise.all([refresh(),open(selected!.id)]);};
+ const submit=async(e:Exercise,answer:string,mode?:'translation')=>{const key='italiano-attempt:'+e.id; let pending: {requestId:string;answer:string;mode?:'translation'}|null=null; try {pending=JSON.parse(sessionStorage.getItem(key) || 'null');} catch {} if(!pending) {pending={requestId:crypto.randomUUID(),answer,...(mode ? {mode} : {})};try {sessionStorage.setItem(key,JSON.stringify(pending));} catch {}} if(pending.answer!==answer || pending.mode!==mode) throw new Error('Une réponse est en attente : renvoyez votre réponse précédente.'); await api('attempt',{exerciseId:e.id,...pending}); await Promise.all([refresh(),open(selected!.id),onProgress?.()]);};
  const submitSentence=(e:Exercise,answer:Answer,draft:SentenceDraft)=>run(async()=>{
   if (!selected) return;
   await api('attempt',{exerciseId:e.id,answer,...draft});
-  await Promise.all([refresh(),open(selected.id)]);
+  await Promise.all([refresh(),open(selected.id),onProgress?.()]);
  });
  if(loading) return <p className="practice-section" role="status">Chargement des séances…</p>;
  const date=todayRome();
@@ -68,7 +71,9 @@ export function Sessions({corrections=false,lesson,onLessonRefresh}:{corrections
  const completed=selected?.exercises.filter(e=>(e.latestAttempt || e.alreadyReviewed) && !e.needsAttempt).length ?? 0;
  const worked=(s:Session)=>s.remaining===undefined ? s.completed+(s.covered_today || 0) : s.total-s.remaining;
  const groupCount=new Set(selected?.exercises.map(e=>e.group_id ?? e.id)).size;
- return <section className="mt-10" aria-label={lesson ? 'Contenu de la leçon' : corrections ? 'Corrections' : 'Votre pratique'}><div className="mb-6 flex flex-wrap items-center justify-between gap-4 border-t border-border pt-9"><div>{!lesson && <div className="mb-3 text-[10px] font-bold tracking-[.18em] text-ring">VOTRE PRATIQUE</div>}<h2 className="mb-0">{lesson?'Contenu de la leçon':corrections?'Corrections':'Séances'}</h2></div><Button variant="outline" className="border-border" disabled={busy} onClick={()=>void run(async()=>{await refresh();const id=lessonSessionId ?? selected?.id;if(id)await open(id);})}><RefreshCw aria-hidden="true"/>Actualiser</Button></div>{error && <p className="notice" role="alert">{error}</p>}{corrections ? <>{attempts.length===0 && <p>Aucune réponse en attente.</p>}{attempts.map(a=><Card className="source-panel" key={a.id}><h3>{a.title || 'Entraînement libre'}</h3><p>{a.content}</p>{a.question?.sentence ? <SentenceFeedback attempt={a}/> : <><p>Votre réponse : {a.answer}</p>{a.status==='pending_teacher'?<p>En attente du professeur.</p>:<><p>Résultat : {a.neutralized?'Verdict neutralisé':a.feedback?.result}</p><AttemptRectifications attempt={a}/><p>Correction : {a.feedback?.correction}</p><p>{a.feedback?.explanation}</p>{a.feedback?.retry && <p>Vous pouvez réessayer dans la séance.</p>}</>}</>}</Card>)}</> : !selected ? !lesson && <div className="grid gap-6">
+ return <section className="mt-10" aria-label={lesson ? 'Contenu de la leçon' : corrections ? 'Corrections' : 'Votre pratique'}><div className="mb-6 flex flex-wrap items-center justify-between gap-4 border-t border-border pt-9"><div>{sessionId ? <h1 className="m-0 wrap-anywhere">{selected?.title ?? 'Séance'}</h1> : <h2 className="mb-0">{lesson?'Contenu de la leçon':corrections?'Corrections':'Séances'}</h2>}</div><Button variant="outline" className="border-border" disabled={busy} onClick={()=>void run(async()=>{await refresh();const id=directSessionId ?? selected?.id;if(id)await open(id);})}><RefreshCw aria-hidden="true"/>Actualiser</Button></div>{error && <p className="notice" role="alert">{error}</p>}{corrections ? <>{attempts.length===0 && <p>Aucune réponse en attente.</p>}{attempts.map(a=><Card className="mb-3 gap-3 p-5 shadow-none" key={a.id}><h3 className="font-semibold">{a.title || 'Entraînement libre'}</h3><p className="m-0 wrap-anywhere">{a.content}</p><WrittenCorrection attempt={a}/>
+   {a.status==='corrected' && <Button asChild variant="outline" className="w-fit"><Link href={'/corrections/'+encodeURIComponent(a.id)}>Ouvrir la correction</Link></Button>}
+  </Card>)}</> : !selected ? !directSessionId && <div className="grid gap-6">
   <div className="flex flex-wrap items-center justify-between gap-4">
     <span className="text-sm text-muted-foreground">{showAll?'Retrouvez toutes vos séances, passées et à venir.':'Vos séances à terminer, en commençant par aujourd’hui.'}</span>
     <div role="group" aria-label="Afficher les séances" className="inline-flex max-w-full gap-1 rounded-lg bg-accent p-1">
@@ -94,10 +99,11 @@ export function Sessions({corrections=false,lesson,onLessonRefresh}:{corrections
   </div>)}
   {!error && sessionGroups.length===0 && <Card className="items-start gap-2 border-dashed border-border p-6 shadow-none"><CalendarDays aria-hidden="true" className="mb-2 size-6 text-primary"/><strong>{showAll?'Aucune séance disponible.':'Vous êtes à jour !'}</strong><span className="text-sm leading-relaxed text-muted-foreground">{showAll?'Vos prochaines séances apparaîtront ici.':'Aucune séance à terminer pour aujourd’hui. Retrouvez les séances terminées et à venir dans « Toutes les séances ».'}</span></Card>}
  </div> : <div className="session-detail">
-  {!lesson && <Button className="session-back" variant="ghost" disabled={busy} onClick={()=>setSelected(null)}><ArrowLeft aria-hidden="true"/>Retour aux séances</Button>}
+  {!lesson && (sessionId ? <Button asChild variant="ghost" className="session-back"><Link href="/#seances"><ArrowLeft aria-hidden="true"/>Retour aux séances</Link></Button>
+   : <Button className="session-back" variant="ghost" disabled={busy} onClick={()=>setSelected(null)}><ArrowLeft aria-hidden="true"/>Retour aux séances</Button>)}
   {lesson?.status!=='advised' && <div className="session-summary">
     {!lesson && <div className="session-meta"><Badge variant="outline">{selected.source==='demo'?'Démonstration':'Professeur'}</Badge><span><CalendarDays size={14} aria-hidden="true"/><time dateTime={selected.scheduled_date}>{displayDate(selected.scheduled_date)}</time></span></div>}
-    {!lesson && <><h3>{selected.title}</h3><p>{selected.objective}</p></>}
+    {!lesson && <>{!sessionId && <h3>{selected.title}</h3>}<p>{selected.objective}</p></>}
     <p className="exercise-help">{groupCount} exercice(s) · {selected.exercises.length} item(s)</p>
     <div className="session-progress"><span id="session-progress-label">Progression de la séance</span><strong>{completed} / {selected.exercises.length} items traités</strong></div>
     <progress aria-labelledby="session-progress-label" value={completed} max={selected.exercises.length || 1}/>
@@ -129,7 +135,7 @@ export function Sessions({corrections=false,lesson,onLessonRefresh}:{corrections
      <p className="font-medium">{e.instruction}</p><p className="text-muted-foreground">{e.content}</p>
     </li>)}
    </ol>
-  </section> : <StudyRunner headingLevel={4} key={selected.id} scopeId={selected.id} items={selected.exercises} busy={busy}
+  </section> : <StudyRunner headingLevel={4} key={selected.id} scopeId={selected.id} initialItemId={occurrenceId} items={selected.exercises} busy={busy}
     onReveal={e=>api('reveal',{exerciseId:e.id})} onSubmit={(e,answer,mode)=>run(()=>submit(e,answer,mode))}
     onSentenceSubmit={submitSentence} onHint={async(e,draft,level)=>(await api('sentence-hint',{exerciseId:e.id,...draft,level})).hints}
     completion={!lesson && completed===selected.exercises.length && <section aria-labelledby="session-difficulty-label" className="mt-4">
