@@ -1,7 +1,6 @@
 import { z } from 'zod';
 import { addDays, romeDay, romeDayStart } from '../lib/revision';
-import { openDatabase } from './database.mjs';
-import { attemptResult, type LearningAttempt } from './learning';
+import { attemptResult, expose, type LearningAttempt } from './learning';
 import { id } from './schemas';
 import { write, type Database } from './store';
 
@@ -35,14 +34,13 @@ function correction(d: Database, attemptId: string) {
 }
 
 export function getStudentCorrection(attemptId: string) {
- const validated = id.parse(attemptId), d = openDatabase();
- try {
-  d.exec('BEGIN');
+ const validated = id.parse(attemptId);
+ return write(d=>{
   const row = correction(d,validated);
-  const result = {attempt:attemptResult(d,row),version:row.correctionVersion,read:row.readAt!==null};
-  d.exec('COMMIT');
-  return result;
- } finally {d.close();}
+  const attempt = attemptResult(d,row);
+  expose(d,row.item_id);
+  return {attempt,version:row.correctionVersion,read:row.readAt!==null};
+ });
 }
 
 export function markCorrectionRead(input: unknown, at = new Date()) {

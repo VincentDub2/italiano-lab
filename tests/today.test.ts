@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { NextRequest } from 'next/server';
+import { GET } from '../src/app/api/[action]/route';
 import { openDatabase } from '../src/server/database.mjs';
 import { composeSession, createBankExercise, rectifyFeedback, searchBank } from '../src/server/bank';
 import { createSession, getSession, publishSession, submitAttempt, submitFeedback } from '../src/server/domain';
@@ -56,6 +58,7 @@ test('projection sans mutation, correction exacte à lire, rejeu et nouvelle rec
   assert.equal(board.primaryAction?.targetId,a.id);
   assert.notEqual(board.primaryAction?.targetId,future.id);
   assert.doesNotMatch(JSON.stringify(board),/Sono in viaggio|Relisez le temps|answer_json/);
+  assert.deepEqual(snapshot(),before);
   const detail=getStudentCorrection(a.id);
   assert.equal(detail.attempt.answer,'Sono in viaggio.');
   assert.equal(detail.read,false);
@@ -73,10 +76,53 @@ test('projection sans mutation, correction exacte à lire, rejeu et nouvelle rec
   assert.equal((await getToday(now)).primaryAction?.targetId,a.id);
   const after=snapshot();
   assert.deepEqual(after[0],before[0]);
-  assert.deepEqual(after[1],before[1]);
+  assert.deepEqual(after[1].map((row:{item_id:string;day:string;kind:string})=>[row.item_id,row.day,row.kind]),[[a.item_id,'2026-03-29','correction']]);
   assert.deepEqual(after[3],before[3]);
   assert.equal(db.prepare('SELECT COUNT(*) AS n FROM correction_reads').get().n,1);
  } finally {db.close();}
+});
+
+test('servir un corrigé rend la réussite du jour assistée sans avancer la consolidation',async t=>{
+ fixture(t);
+ const itemId=bank('une correction à relire');
+ const present=(key:string,date:string)=>{
+  const {id}=composeSession({requestId:key,title:'Raconter',objective:'Situer une action',scheduledDate:date,itemIds:[itemId]});
+  publishSession(id);
+  return {id,occurrenceId:getSession(id).exercises[0].id};
+ };
+ const original=present('original','2026-03-29');
+ const first=answer(original.occurrenceId,'first','Io ero arrivato.');
+ correct(first.id);
+ t.mock.timers.setTime(Date.parse('2026-03-29T22:20:00Z')); // 30 March in Rome.
+ const retry=present('revision','2026-03-30');
+ const revision=()=>getSession(retry.id).exercises[0].revision;
+ const before=revision();
+ assert.equal(before.due,'2026-03-30');
+
+ const get=(action:string,query='')=>GET(new NextRequest('http://localhost/api/'+action+query),{params:Promise.resolve({action})});
+ const home=await get('today');
+ assert.equal(home.status,200);
+ assert.equal((await home.json()).primaryAction.targetId,first.id);
+ const d=openDatabase();
+ try {
+  assert.equal(d.prepare('SELECT COUNT(*) AS n FROM answer_exposures').get().n,0);
+  const served=await get('correction','?id='+first.id);
+  assert.equal(served.status,200);
+  assert.equal((await served.json()).read,false);
+  const second=answer(retry.occurrenceId,'after-reading');
+  assert.equal(second.assisted,true);
+  submitFeedback({attemptId:second.id,result:'correct',correction:'Sono in viaggio.',explanation:'Formulation correcte.'});
+  assert.equal(revision().successes,before.successes);
+  assert.equal(revision().due,before.due);
+  assert.equal(d.prepare('SELECT COUNT(*) AS n FROM correction_reads').get().n,0);
+
+  t.mock.timers.setTime(Date.parse('2026-03-30T22:20:00Z'));
+  const later=present('revision-independante','2026-03-31');
+  const independent=answer(later.occurrenceId,'without-reading');
+  assert.equal(independent.assisted,false);
+  submitFeedback({attemptId:independent.id,result:'correct',correction:'Sono in viaggio.',explanation:'Formulation correcte.'});
+  assert.equal(revision().successes,before.successes+1);
+ } finally {d.close();}
 });
 
 function bank(key:string, closed=false) {

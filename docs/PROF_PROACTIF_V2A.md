@@ -18,7 +18,7 @@ La navigation principale propose **Aujourd’hui**, **Mes leçons**, **S’entra
 | Contrat | Comportement |
 | --- | --- |
 | `GET /api/today` | Renvoie la date à Rome, l’action principale ou `null`, les actions secondaires, les révisions prévues et les avis. Les actions exposent leur type et leurs identifiants internes, avec un titre et une raison. La lecture est sans effet sur la progression. |
-| `GET /api/correction?id=…` | Renvoie la tentative exacte, son retour public, la version courante et l’état de lecture. |
+| `GET /api/correction?id=…` | Renvoie la tentative exacte, son retour public, la version courante et l’état de lecture. Servir le corrigé enregistre une exposition pour le jour civil à Rome. |
 | `POST /api/correction-read` | Enregistre explicitement la lecture pour `{attemptId,version}`. Le rejeu est sans effet. Une nouvelle rectification reste à lire. |
 
 La migration V12 ajoute la table `correction_reads`. Une base V11 reçoit une sauvegarde `.before-correction-reads-…sqlite`. Les anciens retours demeurent consultables et la migration ne leur attribue aucun accusé de lecture. Les anciens contrats MCP et calendrier sont conservés.
@@ -31,7 +31,7 @@ Après validation, utiliser le build V2A sous Node 24. L’application applique 
 
 | Commande | Résultat |
 | --- | --- |
-| `npm test` | 55 tests réussis, dont la priorité des actions, l’accusé de lecture par version, la fenêtre de rattrapage et la migration V11 → V12. |
+| `npm test` | 56 tests réussis, dont la priorité des actions, l’accusé de lecture par version, l’exposition au corrigé, la fenêtre de rattrapage et la migration V11 → V12. |
 | `npm run test:mcp` | Contrats existants vérifiés avec le lanceur MCP stdio. |
 | `npm run lint` | Réussi. |
 | `npm run build -- --webpack` | Build de production et TypeScript réussis dans un dossier de build isolé. |
