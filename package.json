@@ -1,0 +1,43 @@
+{
+  "name": "italiano-lab",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "NODE_OPTIONS=\"${NODE_OPTIONS:+$NODE_OPTIONS }--experimental-sqlite\" next dev",
+    "build": "NODE_OPTIONS=\"${NODE_OPTIONS:+$NODE_OPTIONS }--experimental-sqlite\" next build",
+    "start": "NODE_OPTIONS=\"${NODE_OPTIONS:+$NODE_OPTIONS }--experimental-sqlite\" next start",
+    "lint": "eslint",
+    "test": "NODE_OPTIONS=\"${NODE_OPTIONS:+$NODE_OPTIONS }--experimental-sqlite\" node --import tsx --test tests/*.test.ts",
+    "mcp": "NODE_OPTIONS=\"${NODE_OPTIONS:+$NODE_OPTIONS }--experimental-sqlite\" node --import tsx src/server/mcp.ts",
+    "test:mcp": "NODE_OPTIONS=\"${NODE_OPTIONS:+$NODE_OPTIONS }--experimental-sqlite\" node --import tsx tests/v2-integration.ts",
+    "test:browser": "NODE_OPTIONS=\"${NODE_OPTIONS:+$NODE_OPTIONS }--experimental-sqlite\" playwright test",
+    "test:browser:isolated": "sh tests/run-browser-isolated.sh"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "@shadcn/react": "^0.3.1",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "date-fns": "^4.4.0",
+    "lucide-react": "^0.468.0",
+    "next": "16.4.5",
+    "radix-ui": "^1.4.3",
+    "react": "19.3.0",
+    "react-day-picker": "^10.0.2",
+    "react-dom": "19.3.0",
+    "tailwind-merge": "^3.0.0",
+    "tsx": "^4.23.15",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.58.2",
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.4.5",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  }
+}

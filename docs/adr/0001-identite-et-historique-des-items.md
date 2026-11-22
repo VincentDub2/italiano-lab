@@ -1,0 +1,3 @@
+# Séparer l’identité d’un item de ses présentations et de ses versions
+
+Le suivi pédagogique porte sur l’item de banque réutilisable, tandis que chaque séance ou série conserve la version réellement présentée et ses tentatives. Une modification pédagogique ouvre un nouveau cycle sans réécrire le passé ; une rectification de verdict reste historisée et peut neutraliser son effet sur le suivi. Cette séparation évite qu’une nouvelle séance remette les progrès à zéro ou qu’une modification de la banque transforme silencieusement d’anciennes réponses, au prix de références et de versions explicites plutôt que d’une identité déduite du contenu.
