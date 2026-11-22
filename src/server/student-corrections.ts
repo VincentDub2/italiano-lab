@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { addDays, romeDay, romeDayStart } from '../lib/revision';
+import { openDatabase } from './database.mjs';
 import { attemptResult, expose, type LearningAttempt } from './learning';
 import { id } from './schemas';
 import { write, type Database } from './store';
@@ -57,3 +58,21 @@ export function markCorrectionRead(input: unknown, at = new Date()) {
 }
 
 export type StudentCorrection = ReturnType<typeof getStudentCorrection>;
+
+export function getStudentAttempt(attemptId:string) {
+ const validated=id.parse(attemptId), d=openDatabase();
+ try {
+  const row=d.prepare(`SELECT a.*,v.content,s.title
+   FROM learning_attempts a JOIN item_versions v ON v.id=a.version_id
+   LEFT JOIN exercises e ON e.id=a.occurrence_id LEFT JOIN sessions s ON s.id=e.session_id
+   WHERE a.id=?`).get(validated) as LearningAttempt | undefined;
+  if (!row) throw new Error('Tentative inconnue.');
+  const result=attemptResult(d,row);
+  return {id:result.id,context:result.context,title:result.title,
+   date:romeDay(result.submitted_at),instruction:result.question.instruction,content:result.question.content,
+   answer:result.answerLabel ?? result.answer,status:result.status,assisted:result.assisted,
+   neutralized:result.neutralized,isCorrect:result.is_correct===null ? null : result.is_correct===1};
+ } finally {d.close();}
+}
+
+export type StudentAttempt=ReturnType<typeof getStudentAttempt>;

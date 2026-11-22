@@ -60,6 +60,6 @@ test('migration additive depuis le schéma 3, sans toucher au vocabulaire', () =
   const path=process.env.ITALIANO_DB_PATH!;
   let d=openV5(path);d.prepare('INSERT INTO vocabulary VALUES (?,?,?,?,?,?,?)').run('keep','caffè','café','un caffè','un café','bar','test');
   d.exec('DROP TABLE practice_attempts; DROP TABLE practice_questions; DROP TABLE practice_series; DELETE FROM schema_migrations WHERE version>=4');d.close();
-  d=openDatabase(path);assert.equal(d.prepare('SELECT italian FROM vocabulary WHERE id=?').get('keep')?.italian,'caffè');assert.equal(d.prepare('SELECT MAX(version) AS n FROM schema_migrations').get()?.n,12);assert.deepEqual(d.prepare('PRAGMA foreign_key_check').all(),[]);d.close();
+  d=openDatabase(path);assert.equal(d.prepare('SELECT italian FROM vocabulary WHERE id=?').get('keep')?.italian,'caffè');assert.equal(d.prepare('SELECT MAX(version) AS n FROM schema_migrations').get()?.n,13);assert.deepEqual(d.prepare('PRAGMA foreign_key_check').all(),[]);d.close();
  } finally {cleanup();}
 });

@@ -2,6 +2,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowRight, BookOpen, CalendarDays, Dumbbell, Headphones, Layers, Leaf, Upload, Volume2 } from 'lucide-react';
 import { Today } from '@/components/today';
+import { NotionProgress } from '@/components/notion-progress';
+import { AttemptDetail } from '@/components/attempt-detail';
 import { CorrectionDetail } from '@/components/correction-detail';
 import { Button } from '@/components/ui/button';
 import { Card as Panel } from '@/components/ui/card';
@@ -13,7 +15,7 @@ import { ErrorJournal } from '@/components/error-journal';
 import { Practice } from '@/components/practice';
 import { dueCards, emptyData, mergeImported, normalize, parseMarkdown, readData, type Card, type Data, type Rating } from '@/lib/study';
 
-type Page = 'today' | 'review' | 'vocabulary' | 'difficulties' | 'sources' | 'corrections' | 'practice' | 'errors' | 'lessons' | 'level' | 'correction' | 'session';
+type Page = 'today' | 'review' | 'vocabulary' | 'difficulties' | 'sources' | 'corrections' | 'practice' | 'errors' | 'lessons' | 'level' | 'correction' | 'session' | 'attempt';
 type Mode = 'due' | 'all' | 'difficult';
 const primaryNav = [
  {id:'today',label:'Aujourd’hui',href:'/',icon:CalendarDays},
@@ -68,7 +70,7 @@ export function ItalianoApp({initialPage:page='today',lessonId,sessionId,occurre
   const visible = cards.filter(c => (theme === 'Tous' || c.theme === theme) && normalize(`${c.italian} ${c.french}`).includes(normalize(query)));
   const speak = (c: Card) => { if (!('speechSynthesis' in window) || !('SpeechSynthesisUtterance' in window)) { setAudioMessage('Lecture vocale indisponible dans ce navigateur.'); return; } const voice = speechSynthesis.getVoices().find(v => v.lang.toLowerCase().startsWith('it')); if (!voice) { setAudioMessage('Aucune voix italienne disponible sur cet appareil.'); return; } const utterance = new SpeechSynthesisUtterance(c.italian); utterance.lang='it-IT'; utterance.voice=voice; utterance.onerror=() => setAudioMessage('La lecture vocale a échoué.'); speechSynthesis.cancel(); speechSynthesis.speak(utterance); setAudioMessage(''); };
   const importFile = async (file?: File) => { if (!file) return; try { if (!file.name.toLowerCase().endsWith('.md')) throw new Error('Choisissez un fichier .md.'); const incoming = parseMarkdown(await file.text(),file.name); const added = mergeImported(cards,incoming); const response=await fetch('/api/import',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({imported:added,reviews:{}})}); if(!response.ok) throw new Error('Import impossible.'); setData(d => ({...d,imported:[...d.imported,...added]})); setMessage(`${added.length} expression(s) importée(s), ${incoming.length-added.length} doublon(s) ignoré(s).`); } catch (error) { setMessage(error instanceof Error ? error.message : 'Import impossible.'); } };
-  const activePage = page==='level' || page==='errors' || page==='corrections' || page==='correction' ? 'level' :
+  const activePage = page==='level' || page==='errors' || page==='corrections' || page==='correction' || page==='attempt' ? 'level' :
     page==='session' || page==='today' ? 'today' : page==='lessons' ? 'lessons' : 'practice';
   return <div className="shell">
    <aside className="sidebar">
@@ -84,13 +86,8 @@ export function ItalianoApp({initialPage:page='today',lessonId,sessionId,occurre
     {page==='today' && <Today/>}
     {page==='lessons' && <Lessons lessonId={lessonId}/>}
     {page==='practice' && <Practice key={suggestedPractice ? 'suggested' : 'standard'} suggested={suggestedPractice}/>}
-    {page==='level' && <>
-     <h1 className="mb-5">Mon niveau</h1>
-     <div className="grid gap-3 sm:grid-cols-2">
-      <Button asChild variant="outline"><Link href="/mon-niveau/corrections">Voir mes corrections</Link></Button>
-      <Button asChild variant="outline"><Link href="/mon-niveau/carnet">Ouvrir le carnet d’erreurs</Link></Button>
-     </div>
-    </>}
+    {page==='level' && <NotionProgress/>}
+    {page==='attempt' && attemptId && <AttemptDetail key={attemptId} attemptId={attemptId}/>}
     {page==='errors' && <ErrorJournal/>}
     {page==='corrections' && <><h1 className="mb-2">Mes corrections</h1><Sessions corrections/></>}
     {page==='correction' && attemptId && <CorrectionDetail key={attemptId} attemptId={attemptId}/>}

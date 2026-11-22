@@ -12,17 +12,19 @@ async function main() {
  for (const [name,property] of [
   ['submit_feedback','observations'],['submit_feedback','requestId'],['compose_session','revisionLinks'],
   ['update_draft','revisionLinks'],['publish_session','requestId'],
+  ['create_proactive_lesson','kind'],['create_proactive_lesson','prerequisiteNotionId'],
  ]) {
   const schema=tools.tools.find(tool=>tool.name===name)?.inputSchema;
   assert.ok(schema?.properties?.[property]);
   assert.ok(!schema.required?.includes(property));
  }
- for (const name of ['list_learning_signals','resolve_learning_notion','create_proactive_lesson','get_proactive_lesson','list_proactive_lessons','publish_proactive_lesson']) {
+ for (const name of ['list_learning_signals','list_notion_progress','resolve_learning_notion','create_proactive_lesson','get_proactive_lesson','list_proactive_lessons','publish_proactive_lesson']) {
   assert.ok(tools.tools.some(tool=>tool.name===name));
  }
  const notion=await call('resolve_learning_notion',{requestId:'notion-contract',name:'Temps du récit'});
  assert.deepEqual(await call('resolve_learning_notion',{requestId:'notion-contract',name:'Temps du récit'}),notion);
  assert.equal((await call('list_learning_signals',{notionId:notion.id})).state,'no_data');
+ assert.deepEqual((await call('list_notion_progress',{notionId:notion.id,limit:1})).notions,[]);
  for (const name of ['create_session','compose_session','update_draft']) {
   const schema=tools.tools.find(tool=>tool.name===name)?.inputSchema;
   assert.ok(schema?.properties?.takeaways);

@@ -4,6 +4,7 @@ import { romeDay } from '../lib/revision';
 import { openDatabase } from './database.mjs';
 import { composeSchema, compositionFields, insertComposedDraft } from './bank';
 import { lessonEvidence, promptKey } from './learning-signals';
+import { nextStepEvidence } from './notion-progress';
 import { lessonMilestones } from './proactive-progress';
 import { id, text, type SessionTakeaway } from './schemas';
 import { mutation, write, type Database } from './store';
@@ -13,16 +14,22 @@ type Lesson = {
  id:string; notion_id:string; notion:string; session_id:string; reason:string; status:LessonStatus;
  title:string; objective:string; request_id:string; created_at:string; advised_at:string|null;
  started_at:string|null; j0_date:string|null; dismissed_at:string|null; dismissed_reason:string|null;
+ prerequisite_notion_id:string|null; prerequisite_notion:string|null;
 };
 type Prompt = {itemId:string;content:string;instruction:string;type:string;answerJson:string};
-const lessonSelect = `SELECT l.*,s.title,s.objective,s.request_id,n.name AS notion FROM proactive_lessons l
- JOIN sessions s ON s.id=l.session_id JOIN notions n ON n.id=l.notion_id`;
+const lessonSelect = `SELECT l.*,s.title,s.objective,s.request_id,n.name AS notion,
+ p.notion_id AS prerequisite_notion_id,pn.name AS prerequisite_notion FROM proactive_lessons l
+ JOIN sessions s ON s.id=l.session_id JOIN notions n ON n.id=l.notion_id
+ LEFT JOIN proactive_lesson_prerequisites p ON p.lesson_id=l.id LEFT JOIN notions pn ON pn.id=p.notion_id`;
 
 export const createLessonSchema = z.object({
  ...compositionFields, notionId:id, reason:text.max(500), evidenceAttemptIds:z.array(id).min(2).max(20),
+ kind:z.enum(['remediation','next_step']).optional(), prerequisiteNotionId:id.optional(),
 }).strict()
  .refine(v=>!/^italiano-daily-\d{4}-\d{2}-\d{2}$/.test(v.requestId),'Cette clé est réservée aux séances quotidiennes.')
- .refine(v=>new Set(v.evidenceAttemptIds).size===v.evidenceAttemptIds.length,'Preuves dupliquées.');
+ .refine(v=>new Set(v.evidenceAttemptIds).size===v.evidenceAttemptIds.length,'Preuves dupliquées.')
+ .refine(v=>v.kind==='next_step' ? Boolean(v.prerequisiteNotionId && v.prerequisiteNotionId!==v.notionId) :
+  v.prerequisiteNotionId===undefined,'Une leçon de progression exige un prérequis distinct de sa notion cible.');
 export const publishLessonSchema = z.object({lessonId:id,requestId:id}).strict();
 export const lessonActionSchema = z.object({lessonId:id,requestId:id,action:z.enum(['start','dismiss'])}).strict();
 export const listLessonsSchema = z.object({
@@ -39,22 +46,31 @@ function evidenceIds(d: Database, lessonId: string) {
  return (d.prepare('SELECT attempt_id FROM proactive_lesson_evidence WHERE lesson_id=? ORDER BY attempt_id').all(lessonId) as {attempt_id:string}[]).map(e=>e.attempt_id);
 }
 
-function validEvidence(d: Database, l: Lesson, at: Date) {
- return lessonEvidence(d,l.notion_id,evidenceIds(d,l.id),at);
+function validEvidence(d: Database, l: Lesson, at: Date, selected = evidenceIds(d,l.id)) {
+ return l.prerequisite_notion_id ? nextStepEvidence(d,l.prerequisite_notion_id,selected,at) : lessonEvidence(d,l.notion_id,selected,at);
+}
+
+function lessonKind(l: Lesson) {
+ return l.prerequisite_notion_id ? 'next_step' as const : 'remediation' as const;
 }
 
 export function createLesson(input: unknown) {
  const v = createLessonSchema.parse(input);
- const {notionId,reason,evidenceAttemptIds,...composition} = v;
+ const {notionId,reason,evidenceAttemptIds,kind,prerequisiteNotionId,...composition} = v;
  return write(d=>mutation(d,v.requestId,'create-lesson',v,()=>{
   const at = new Date();
-  if (lessonEvidence(d,notionId,evidenceAttemptIds,at).length !== evidenceAttemptIds.length) {
-   throw new Error('Choisissez au moins deux preuves valides et distinctes de cette notion.');
+  if (!d.prepare('SELECT 1 FROM notions WHERE id=?').get(notionId)) throw new Error('Notion cible inconnue.');
+  const evidence = prerequisiteNotionId ? nextStepEvidence(d,prerequisiteNotionId,evidenceAttemptIds,at) :
+   lessonEvidence(d,notionId,evidenceAttemptIds,at);
+  if (evidence.length!==evidenceAttemptIds.length) {
+   throw new Error(kind==='next_step' ? 'Le prérequis doit être étayé par deux réussites récentes sans aide, dont une production corrigée.' :
+    'Choisissez au moins deux preuves valides et distinctes de cette notion.');
   }
   const sessionId = insertComposedDraft(d,composeSchema.parse({...composition,scheduledDate:romeDay(at)}));
   const lessonId = randomUUID();
   d.prepare("INSERT INTO proactive_lessons (id,notion_id,session_id,reason,status,created_at) VALUES (?,?,?,?,'draft',?)")
    .run(lessonId,notionId,sessionId,reason,at.toISOString());
+  if (prerequisiteNotionId) d.prepare('INSERT INTO proactive_lesson_prerequisites VALUES (?,?)').run(lessonId,prerequisiteNotionId);
   const insert = d.prepare('INSERT INTO proactive_lesson_evidence VALUES (?,?)');
   for (const attemptId of evidenceAttemptIds) insert.run(lessonId,attemptId);
   return {id:lessonId,sessionId};
@@ -87,8 +103,9 @@ export function publishLesson(input: unknown) {
  return write(d=>mutation(d,v.requestId,'publish-lesson',v,()=>{
   const l = findLesson(d,v.lessonId), at = new Date(), stamp = at.toISOString();
   if (l.status!=='draft') throw new Error('Seul un brouillon de leçon peut être conseillé.');
-  const evidence = validEvidence(d,l,at);
-  if (evidence.length!==evidenceIds(d,l.id).length) throw new Error('Les preuves de la proposition doivent encore être admissibles.');
+  const selected = evidenceIds(d,l.id);
+  const evidence = validEvidence(d,l,at,selected);
+  if (evidence.length!==selected.length) throw new Error('Les preuves de la proposition doivent encore être admissibles.');
   const slot = d.prepare("SELECT id,status FROM proactive_lessons WHERE status IN ('advised','in_progress')").get();
   if (slot) {
    if (slot.status==='in_progress' || validEvidence(d,findLesson(d,slot.id),at).length>=2) throw new Error('Une leçon occupe déjà la place.');
@@ -114,7 +131,7 @@ function studentLesson(d: Database, l: Lesson, at = new Date()) {
  const inProgress = l.status==='in_progress';
  return {
   id:l.id,sessionId:l.session_id,notion:l.notion,title:l.title,objective:l.objective,reason:l.reason,
-  status:l.status,canStart:l.status==='advised' && validEvidence(d,l,at).length>=2,j0Date:l.j0_date,
+  kind:lessonKind(l),status:l.status,canStart:l.status==='advised' && validEvidence(d,l,at).length>=2,j0Date:l.j0_date,
   minutes:Math.ceil(Number(d.prepare(`SELECT SUM(CASE WHEN v.type IN ('free_text','sentence')
     AND (v.type='free_text' OR json_extract(v.answer_json,'$.format')<>'word_order') THEN 180 ELSE 30 END) AS seconds
     FROM exercises e JOIN item_versions v ON v.id=e.version_id WHERE e.session_id=?`).get(l.session_id)?.seconds ?? 0)/60),
@@ -154,7 +171,7 @@ export function getTeacherLesson(lessonId: string) {
  try {
   const l = findLesson(d,lessonId);
   return {...studentLesson(d,l),notionId:l.notion_id,requestId:l.request_id,createdAt:l.created_at,advisedAt:l.advised_at,
-   startedAt:l.started_at,dismissedAt:l.dismissed_at,dismissedReason:l.dismissed_reason,evidenceAttemptIds:evidenceIds(d,l.id)};
+   prerequisiteNotionId:l.prerequisite_notion_id,prerequisiteNotion:l.prerequisite_notion,startedAt:l.started_at,dismissedAt:l.dismissed_at,dismissedReason:l.dismissed_reason,evidenceAttemptIds:evidenceIds(d,l.id)};
  } finally {d.close();}
 }
 
@@ -166,7 +183,7 @@ export function listTeacherLessons(input: unknown = {}) {
   const active = d.prepare(lessonSelect+" WHERE l.status IN ('advised','in_progress')").get() as Lesson | undefined;
   const summary = active && studentLesson(d,active);
   return {activeLesson:summary && (summary.status==='in_progress' || summary.canStart) ? summary : null,
-   lessons:rows.slice(0,v.limit).map(l=>({...studentLesson(d,l),notionId:l.notion_id,requestId:l.request_id})),
+   lessons:rows.slice(0,v.limit).map(l=>({...studentLesson(d,l),notionId:l.notion_id,requestId:l.request_id,prerequisiteNotionId:l.prerequisite_notion_id})),
    nextOffset:rows.length>v.limit ? v.offset+v.limit : null};
  } finally {d.close();}
 }

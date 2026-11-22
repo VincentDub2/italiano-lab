@@ -51,9 +51,11 @@ export function saveObservations(d: Database, attemptId: string, observations: O
 }
 
 export function promptKey(content: string, instruction: string, type: string, answerJson: string) {
- const turns = type === 'sentence' ? JSON.parse(answerJson).turns as string[] | undefined : undefined;
+ const definition = type === 'sentence' ? JSON.parse(answerJson) as {format:string;turns?:string[];tokens?:string[]} : undefined;
  const normalize = (value: string) => value.normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{M}\p{N}]+/gu,' ').trim();
- return [normalize(content) || normalize(instruction), ...(turns ?? []).map(normalize)].join('|');
+ const parts = definition?.format==='word_order' ? (definition.tokens ?? []).map(normalize).sort() :
+  (definition?.turns ?? []).map(normalize);
+ return [normalize(content) || normalize(instruction),...parts].join('|');
 }
 
 function evidenceRows(d: Database, at: Date, notionId?: string) {
@@ -74,22 +76,32 @@ function evidenceRows(d: Database, at: Date, notionId?: string) {
   .all(romeDayStart(addDays(romeDay(at),-29)),at.toISOString(),...(notionId ? [notionId] : [])) as EvidenceRow[];
  if (!rows.length) return [];
  const evidence = rows.map(row=>({...row,question:promptKey(row.content,row.instruction,row.type,row.answerJson)}));
- const unresolved = new Set(evidence.map(row=>row.question));
+ const firstAttempts = firstPromptAttempts(d,evidence.map(row=>row.question));
+ return evidence.filter(row=>firstAttempts.has(row.attemptId));
+}
+
+export function firstPromptAttempts(d: Database, questions:string[], includeAutomatic = false) {
+ const unresolved = new Set(questions);
+ if (!unresolved.size) return new Set<string>();
  const firstAttempts = new Set<string>();
  const history = d.prepare(`SELECT a.id,v.content,v.instruction,v.type,v.answer_json AS answerJson
   FROM item_versions v JOIN learning_attempts a ON a.rowid=(
    SELECT h.rowid FROM learning_attempts h WHERE h.version_id=v.id AND h.mode='answer'
-    AND h.status IN ('pending_teacher','corrected') ORDER BY h.submitted_at,h.rowid LIMIT 1
+    AND h.status IN ('pending_teacher','corrected'${includeAutomatic ? ",'auto_corrected'" : ''}) ORDER BY h.submitted_at,h.rowid LIMIT 1
   ) ORDER BY a.submitted_at,a.rowid`).iterate() as Iterable<Pick<EvidenceRow,'content'|'instruction'|'type'|'answerJson'> & {id:string}>;
  for (const previous of history) {
   if (unresolved.delete(promptKey(previous.content,previous.instruction,previous.type,previous.answerJson))) firstAttempts.add(previous.id);
   if (!unresolved.size) break;
  }
- return evidence.filter(row=>firstAttempts.has(row.attemptId));
+ return firstAttempts;
+}
+
+export function distinctPrompts(a:{itemId:string;question:string},b:{itemId:string;question:string}) {
+ return a.itemId!==b.itemId && a.question!==b.question;
 }
 
 function distinctEvidence(rows: Evidence[]) {
- const first = rows.find(row => rows.some(other => row.itemId !== other.itemId && row.question !== other.question));
+ const first = rows.find(row => rows.some(other => distinctPrompts(row,other)));
  if (!first) return [];
  const items = new Set([first.itemId]), prompts = new Set([first.question]);
  return [first,...rows.filter(row => {
@@ -105,23 +117,32 @@ export function lessonEvidence(d: Database, notionId: string, attemptIds: string
  return distinctEvidence(evidenceRows(d,at,notionId).filter(row => selected.has(row.attemptId)));
 }
 
+function recurrentEvidence(d:Database,at:Date,notionId?:string) {
+ const grouped = new Map<string,Evidence[]>();
+ for (const row of evidenceRows(d,at,notionId)) {
+  const rows = grouped.get(row.notionId);
+  if (rows) rows.push(row);
+  else grouped.set(row.notionId,[row]);
+ }
+ return [...grouped.values()].map(distinctEvidence).filter(rows=>rows.length>0);
+}
+
+export function recurrentNotionIds(d:Database,at:Date,notionId?:string) {
+ return new Set(recurrentEvidence(d,at,notionId).map(rows=>rows[0].notionId));
+}
+
 export function listLearningSignals(input: unknown = {}) {
  const v = signalsSchema.parse(input), d = openDatabase();
  try {
   if (v.notionId && !d.prepare('SELECT 1 FROM notions WHERE id=?').get(v.notionId)) throw new Error('Notion inconnue.');
-  const at = new Date(), grouped = new Map<string,Evidence[]>();
-  for (const row of evidenceRows(d,at,v.notionId)) {
-   const rows = grouped.get(row.notionId);
-   if (rows) rows.push(row);
-   else grouped.set(row.notionId,[row]);
-  }
-  const candidates = [...grouped.values()].flatMap(rows => {
-   const evidence = distinctEvidence(rows).slice(0,10).map(row => ({
+  const at = new Date();
+  const candidates = recurrentEvidence(d,at,v.notionId).map(rows => {
+   const evidence = rows.slice(0,10).map(row => ({
     attemptId:row.attemptId, itemId:row.itemId, versionId:row.versionId, context:row.context,
     content:row.content, instruction:row.instruction, submittedAt:row.submittedAt, reviewedAt:row.reviewedAt,
     explanation:row.explanation, ...(row.type === 'sentence' && JSON.parse(row.answerJson).turns ? {turns:JSON.parse(row.answerJson).turns} : {}),
    }));
-   return evidence.length ? [{notionId:rows[0].notionId,notion:rows[0].notion,evidence}] : [];
+   return {notionId:rows[0].notionId,notion:rows[0].notion,evidence};
   });
   const hasObservations = d.prepare(`SELECT 1 FROM learning_observations o JOIN learning_attempts a ON a.id=o.attempt_id
    WHERE a.submitted_at>=? AND a.reviewed_at<=? AND ${v.notionId ? 'o.notion_id=?' : '1=1'} LIMIT 1`)

@@ -106,7 +106,10 @@ export function Lessons({lessonId}: {lessonId?:string}) {
    <h1 className="mb-3 wrap-anywhere">{lesson.title}</h1>
    <p className="mb-4 text-muted-foreground wrap-anywhere">{lesson.objective}</p>
    <p className="mb-4 wrap-anywhere">{lesson.reason}</p>
-   <div role="status"><Badge variant="outline">{lessonState(lesson)}</Badge></div>
+   <div role="status" className="flex flex-wrap items-center gap-2">
+    <Badge variant="outline">{lessonState(lesson)}</Badge>
+    {lesson.kind==='next_step' && <Badge variant="secondary">Pour aller plus loin</Badge>}
+   </div>
    {lesson.status==='advised' && <LessonActions key={lesson.id} lesson={lesson} refresh={refresh}/>}
    <LessonDates lesson={lesson}/>
    {lesson.status!=='dismissed' && <Sessions lesson={lesson} onLessonRefresh={refresh}/>}
@@ -125,6 +128,7 @@ export function Lessons({lessonId}: {lessonId?:string}) {
       <div className="flex flex-wrap items-center gap-2">
        <Link className="font-semibold text-primary underline-offset-4 hover:underline wrap-anywhere" href={lessonHref(l.id)}>{l.title}</Link>
        <Badge variant="outline">{lessonState(l)}</Badge>
+       {l.kind==='next_step' && <Badge variant="secondary">Pour aller plus loin</Badge>}
       </div>
       {next && <p className="m-0 text-sm text-muted-foreground">{next.date<romeDay()?'Révision en retard':'Prochaine révision'} · J{next.step} · <time dateTime={next.date}>{dateLabel.format(new Date(next.date+'T12:00:00Z'))}</time></p>}
      </Card>

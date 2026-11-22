@@ -20,6 +20,9 @@ function setNotions(d: Database, itemId: string, names: string[]) {
   d.prepare('INSERT INTO item_notions VALUES (?,?)').run(itemId,notion.id);
  }
 }
+function snapshotNotions(d: Database,itemId:string,versionId:string) {
+ d.prepare('INSERT INTO item_version_notions SELECT ?,notion_id FROM item_notions WHERE item_id=?').run(versionId,itemId);
+}
 export const createBankSchema = z.object({ requestId: id, exercise: exerciseSchema, notions: z.array(text.max(200)).max(20).default([]), originItemId: id.optional() }).strict();
 export function createBankExercise(input: unknown) {
  const v = createBankSchema.parse(input);
@@ -30,6 +33,7 @@ export function createBankExercise(input: unknown) {
   const itemIds = ('items' in e ? e.items : [e]).map(item => {
    const added = addBankItem(d,{ group_id: groupId, type: e.type, instruction: e.instruction, content: item.content, objective: e.objective || null, choices_json: 'choices' in item ? JSON.stringify(item.choices) : null, answer_json: versionAnswer(item), explanation: item.explanation || null },undefined,'prof',v.originItemId);
    setNotions(d,added.itemId,v.notions);
+   snapshotNotions(d,added.itemId,added.versionId);
    return added.itemId;
   });
   return { groupId, itemIds };
@@ -112,6 +116,7 @@ export function reviseItem(input: unknown) {
   d.prepare('INSERT INTO item_versions VALUES (?,?,?,?,?,?,?,?,?,?,?)').run(versionId,v.itemId,v.kind === 'typo' ? old.cycle_id : versionId,old.type,instruction,v.content,old.objective,choices ? JSON.stringify(choices) : null,answer,v.explanation ?? old.explanation,new Date().toISOString());
   d.prepare('UPDATE bank_items SET current_version_id=? WHERE id=?').run(versionId,v.itemId);
   if (v.notions) setNotions(d,v.itemId,v.notions);
+  snapshotNotions(d,v.itemId,versionId);
   saveReview(d,itemVersion(d,versionId));
   return { itemId: v.itemId, versionId };
  }));
