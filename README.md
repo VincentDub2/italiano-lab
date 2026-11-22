@@ -4,9 +4,11 @@ Application locale de révision d’italien, en français. Les 18 expressions fo
 
 ## Démarrage
 
-Avec Node.js 22.12 ou supérieur :
+Le serveur, le MCP et les tests utilisent Node.js 24. Avec nvm, lancez les commandes suivantes depuis la racine du projet.
 
 ```sh
+nvm install
+nvm use
 npm install
 npm run dev
 ```
@@ -53,7 +55,7 @@ Voir [le fonctionnement et la migration](docs/ENTRAINEMENT_LIBRE.md), [le bilan 
 
 ## Exécution locale
 
-Node 22.12 ou supérieur est requis (`node:sqlite`). Depuis ce dossier : `npm run build -- --webpack`, puis `npm run start -- --hostname 127.0.0.1 --port 3211`. Ne pas exposer le serveur au réseau. La base est `/Users/vincent/italiano-lab/data/italiano.sqlite` ; `ITALIANO_DB_PATH` permet de choisir un fichier isolé. Le chemin par défaut est résolu depuis la racine du projet, indépendamment du répertoire courant.
+Depuis ce dossier, lancez `npm run build -- --webpack`, puis `npm run start -- --hostname 127.0.0.1 --port 3211` sous Node.js 24. Ne pas exposer le serveur au réseau. La base est `/Users/vincent/italiano-lab/data/italiano.sqlite` ; `ITALIANO_DB_PATH` permet de choisir un fichier isolé. Le chemin par défaut est résolu depuis la racine du projet, indépendamment du répertoire courant.
 
 Dans Sources, le bouton « Importer mon ancienne progression » copie explicitement les données V1 valides sans effacer localStorage et sans remplacer les révisions déjà présentes. Les nouvelles données utilisent SQLite. La séance de démonstration est créée une fois lors du chargement des séances.
 

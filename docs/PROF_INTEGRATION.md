@@ -6,7 +6,7 @@ Le profil Hermes, ses autorisations d’outils et ses crons n’ont pas été mo
 
 ## Serveur stdio
 
-Utiliser un lanceur qui fixe le répertoire de travail et active SQLite sous Node 22.12 :
+Le lanceur MCP fixe le répertoire de travail et utilise Node.js 24 avec le module SQLite intégré.
 
 ```json
 {
@@ -19,7 +19,7 @@ Utiliser un lanceur qui fixe le répertoire de travail et active SQLite sous Nod
 }
 ```
 
-Ceci est un exemple de configuration Hermes, pas une instruction de modifier manuellement le YAML. Installer via le mécanisme de configuration MCP validé de Hermes dans le profil voulu. Le lanceur utilise node depuis PATH ; vérifier le PATH du processus Hermes. Sans ITALIANO_DB_PATH, il utilise la même base data/italiano.sqlite que l'app. Ne pas injecter de chemin de base de test dans le profil.
+Ceci est un exemple de configuration Hermes, pas une instruction de modifier manuellement le YAML. Installer via le mécanisme de configuration MCP validé de Hermes dans le profil voulu. Le lanceur utilise Node.js 24 depuis le `PATH` ou le retrouve dans l’installation nvm de l’utilisateur qui exécute Hermes. Si Node 24 est indisponible, il s’arrête avec une erreur explicite. Sans `ITALIANO_DB_PATH`, il utilise la même base `data/italiano.sqlite` que l’application. Pour un test, fournir un chemin SQLite temporaire au lanceur.
 
 Outils : get_learning_summary, create_session, list_sessions, get_session, publish_session, get_pending_answers, submit_feedback, get_attempt. Pour create_session, fournir requestId stable, title, objective, scheduledDate YYYY-MM-DD et exercises. Les schémas sont découverts via tools/list.
 

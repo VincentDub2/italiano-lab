@@ -9,8 +9,8 @@ test_port=${ITALIANO_TEST_PORT:-3211}
 export ITALIANO_TEST_URL="http://127.0.0.1:$test_port"
 cleanup() { if [ -n "${server_pid:-}" ]; then kill "$server_pid" 2>/dev/null || true; wait "$server_pid" 2>/dev/null || true; fi; rm -rf "$dir"; }
 trap cleanup EXIT INT TERM
-node -e "const net=require('node:net');const s=net.createServer();s.on('error',()=>{console.error('Le port de test est occupé');process.exit(1)});s.listen(Number(new URL(process.env.ITALIANO_TEST_URL).port),'127.0.0.1',()=>s.close())"
-NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--experimental-sqlite --import=./tests/browser-clock.mjs" node node_modules/next/dist/bin/next start --hostname 127.0.0.1 --port "$test_port" &
+sh scripts/node.sh -e "const net=require('node:net');const s=net.createServer();s.on('error',()=>{console.error('Le port de test est occupé');process.exit(1)});s.listen(Number(new URL(process.env.ITALIANO_TEST_URL).port),'127.0.0.1',()=>s.close())"
+NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--import=./tests/browser-clock.mjs" sh scripts/node.sh node_modules/next/dist/bin/next start --hostname 127.0.0.1 --port "$test_port" &
 server_pid=$!
-node -e "const http=require('node:http');let n=0;function ping(){http.get(process.env.ITALIANO_TEST_URL,r=>{r.resume();process.exit(0)}).on('error',()=>{if(++n>60)process.exit(1);setTimeout(ping,500)})}ping()"
-npm run test:browser -- "$@"
+sh scripts/node.sh -e "const http=require('node:http');let n=0;function ping(){http.get(process.env.ITALIANO_TEST_URL,r=>{r.resume();process.exit(0)}).on('error',()=>{if(++n>60)process.exit(1);setTimeout(ping,500)})}ping()"
+sh scripts/node.sh node_modules/@playwright/test/cli.js test "$@"

@@ -2,15 +2,18 @@
   "name": "italiano-lab",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": "24.x"
+  },
   "scripts": {
-    "dev": "NODE_OPTIONS=\"${NODE_OPTIONS:+$NODE_OPTIONS }--experimental-sqlite\" next dev",
-    "build": "NODE_OPTIONS=\"${NODE_OPTIONS:+$NODE_OPTIONS }--experimental-sqlite\" next build",
-    "start": "NODE_OPTIONS=\"${NODE_OPTIONS:+$NODE_OPTIONS }--experimental-sqlite\" next start",
-    "lint": "eslint",
-    "test": "NODE_OPTIONS=\"${NODE_OPTIONS:+$NODE_OPTIONS }--experimental-sqlite\" node --import tsx --test tests/*.test.ts",
-    "mcp": "NODE_OPTIONS=\"${NODE_OPTIONS:+$NODE_OPTIONS }--experimental-sqlite\" node --import tsx src/server/mcp.ts",
-    "test:mcp": "NODE_OPTIONS=\"${NODE_OPTIONS:+$NODE_OPTIONS }--experimental-sqlite\" node --import tsx tests/v2-integration.ts",
-    "test:browser": "NODE_OPTIONS=\"${NODE_OPTIONS:+$NODE_OPTIONS }--experimental-sqlite\" playwright test",
+    "dev": "sh scripts/node.sh node_modules/next/dist/bin/next dev",
+    "build": "sh scripts/node.sh node_modules/next/dist/bin/next build",
+    "start": "sh scripts/node.sh node_modules/next/dist/bin/next start",
+    "lint": "sh scripts/node.sh node_modules/eslint/bin/eslint.js",
+    "test": "sh scripts/node.sh --import tsx --test tests/*.test.ts",
+    "mcp": "sh scripts/mcp.sh",
+    "test:mcp": "sh scripts/node.sh --import tsx tests/v2-integration.ts",
+    "test:browser": "sh scripts/node.sh node_modules/@playwright/test/cli.js test",
     "test:browser:isolated": "sh tests/run-browser-isolated.sh"
   },
   "dependencies": {

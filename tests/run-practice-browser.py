@@ -11,6 +11,7 @@ import time
 import urllib.request
 
 root = Path(__file__).resolve().parent.parent
+runtime = ['/bin/sh', str(root / 'scripts/node.sh')]
 with tempfile.TemporaryDirectory(prefix='italiano-practice-e2e-') as tmp:
     work = Path(tmp) / 'app'
     work.mkdir()
@@ -21,11 +22,11 @@ with tempfile.TemporaryDirectory(prefix='italiano-practice-e2e-') as tmp:
     (work / 'node_modules').symlink_to(root / 'node_modules', target_is_directory=True)
     env = dict(os.environ, ITALIANO_DB_PATH=str(Path(tmp) / 'test.sqlite'),
                ITALIANO_TEST_URL='http://127.0.0.1:3219', ITALIANO_PRACTICE_ISOLATED='1',
-               NODE_OPTIONS=(os.environ.get('NODE_OPTIONS', '') + ' --experimental-sqlite').strip())
+               ITALIANO_REMINDERS_PATH=str(Path(tmp) / 'revisions.json'))
     with socket.socket() as sock:
         sock.bind(('127.0.0.1', 3219))
-    subprocess.run(['node', 'node_modules/next/dist/bin/next', 'build', '--webpack'], cwd=work, env=env, check=True)
-    server = subprocess.Popen(['node', 'node_modules/next/dist/bin/next', 'start', '--hostname', '127.0.0.1', '--port', '3219'], cwd=work, env=env)
+    subprocess.run([*runtime, 'node_modules/next/dist/bin/next', 'build', '--webpack'], cwd=work, env=env, check=True)
+    server = subprocess.Popen([*runtime, 'node_modules/next/dist/bin/next', 'start', '--hostname', '127.0.0.1', '--port', '3219'], cwd=work, env=env)
     try:
         for _ in range(60):
             if server.poll() is not None:
@@ -38,7 +39,7 @@ with tempfile.TemporaryDirectory(prefix='italiano-practice-e2e-') as tmp:
         else:
             raise RuntimeError('Serveur indisponible')
         specs = sys.argv[1:] or ['tests/practice-browser.spec.ts']
-        subprocess.run(['node', 'node_modules/@playwright/test/cli.js', 'test', *specs, '--output', str(Path(tmp) / 'results'), '--reporter=line'], cwd=root, env=env, check=True)
+        subprocess.run([*runtime, 'node_modules/@playwright/test/cli.js', 'test', *specs, '--output', str(Path(tmp) / 'results'), '--reporter=line'], cwd=root, env=env, check=True)
     finally:
         server.terminate()
         server.wait(timeout=10)

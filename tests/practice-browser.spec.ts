@@ -6,7 +6,7 @@ const base=process.env.ITALIANO_TEST_URL || 'http://127.0.0.1:3211';
 test('banque → séance → erreur → nouvel essai après trois items → carnet → entraînement libre',async({page})=>{
  if (!process.env.ITALIANO_DB_PATH) throw new Error('Base isolée requise.');
  const errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));
- const client=new Client({name:'learning-browser',version:'1'});await client.connect(new StdioClientTransport({command:process.execPath,args:['--import','tsx','src/server/mcp.ts'],env:process.env as Record<string,string>,stderr:'pipe'}));
+ const client=new Client({name:'learning-browser',version:'1'});await client.connect(new StdioClientTransport({command:'/bin/sh',args:['scripts/mcp.sh'],env:process.env as Record<string,string>,stderr:'pipe'}));
  const call=async(name:string,args:Record<string,unknown>)=>{const r=await client.callTool({name,arguments:args});if(r.isError)throw new Error(JSON.stringify(r));return JSON.parse((r.content as {text:string}[])[0].text);};
  try {
   const token=randomUUID(),notion='Notion '+token,title='Séance ciblée '+token;

@@ -12,8 +12,9 @@ const subject = 'Imparfait et passé composé';
 async function professor() {
  const client = new Client({name:'proactive-browser-test',version:'1'});
  await client.connect(new StdioClientTransport({
-  command:process.execPath,args:['--import','./tests/browser-clock.mjs','--import','tsx','src/server/mcp.ts'],
-  env:process.env as Record<string,string>,stderr:'pipe',
+  command:'/bin/sh',args:['scripts/mcp.sh'],
+  env:{...process.env,NODE_OPTIONS:`${process.env.NODE_OPTIONS ?? ''} --import=./tests/browser-clock.mjs`.trim()} as Record<string,string>,
+  stderr:'pipe',
  }));
  const call = async(name:string,args:Record<string,unknown>)=>{
   const response = await client.callTool({name,arguments:args});

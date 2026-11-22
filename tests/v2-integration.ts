@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 const dir=mkdtempSync(join(tmpdir(),'data-test-')); process.env.ITALIANO_DB_PATH=join(dir,'test.sqlite');
 async function main() {
- const transport=new StdioClientTransport({command:process.execPath,args:['--import','tsx','src/server/mcp.ts'],env:{...process.env,ITALIANO_DB_PATH:process.env.ITALIANO_DB_PATH!} as Record<string,string>,stderr:'pipe'});
+ const transport=new StdioClientTransport({command:'/bin/sh',args:['scripts/mcp.sh'],env:{...process.env,ITALIANO_DB_PATH:process.env.ITALIANO_DB_PATH!} as Record<string,string>,stderr:'pipe'});
  const client=new Client({name:'integration-test',version:'1'}); await client.connect(transport);
  try {const tools=await client.listTools(); const call=async(name:string,args:Record<string,unknown>)=>{const r=await client.callTool({name,arguments:args}); if(r.isError) throw new Error(JSON.stringify(r)); return JSON.parse((r.content as {text:string}[])[0].text);};
  for (const [name,property] of [
