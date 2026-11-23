@@ -14,3 +14,10 @@
 4. Relis `get_assessment` et vérifie `status=reviewed`. Après une incertitude réseau, relis l’état de l’ID exact. Pour rejouer une mutation après un délai dépassé, réutilise la clé et le contenu exacts. Après un doute à la création, rejoue le brouillon avec la même clé pour retrouver son ID. Résume uniquement les IDs et états vérifiés. Garde les textes de Vincent, la grille et les corrections hors du résumé.
 
 Les résultats sont publiés une seule fois. Toute leçon conseillée par les outils V1/V2 reste soumise aux preuves habituelles. La routine traite une file séparée pour les bilans et continue à traiter les corrections de séance.
+
+## Comparer deux bilans corrigés
+
+1. Pour préparer une seconde situation, relis un bilan corrigé et choisis la même compétence. Garde les mêmes notions cibles, la même succession de formats, un niveau d’exigence comparable et des critères communs. Change réellement le contexte, l’interlocuteur ou l’intention. Garde les énoncés inédits.
+2. Une fois les deux retours publiés, relis chaque `get_assessment` et vérifie l’équivalence des tâches. Choisis une notion et associe les critères qui l’observent. Dans chaque retour, sélectionne une tâche citée pour chaque critère observé. Une production peut éclairer une notion si le constat porte explicitement sur celle-ci. Un trou ou une remise en ordre exige que le bilan cible une seule notion. Pour un constat non observé, laisse l’identifiant de tâche vide et conserve le motif du retour.
+3. Utilise `publish_assessment_comparison` avec une clé stable, les deux IDs dans l’ordre des rendus, leurs contextes et une justification pédagogique publique. Garde les réponses, les corrigés et la grille hors de la justification. Relis via `list_assessment_comparisons` avec le `comparisonId` du reçu. Après un doute réseau, rejoue la même publication avec les mêmes champs et la même clé pour retrouver son ID.
+4. Utilise les comparaisons pour expliquer les réussites et les fragilités d’une situation à l’autre. Choisis les prérequis d’une leçon avec les preuves habituelles de `list_notion_progress`.

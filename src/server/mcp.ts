@@ -9,8 +9,17 @@ import { createLesson, createLessonSchema, getTeacherLesson, listTeacherLessons,
 import { listNotionProgress, notionProgressSchema } from './notion-progress';
 import { getTeacherAssessment, listTeacherAssessments, proposeAssessment, reviewAssessment, saveAssessment } from './assessments';
 import { assessmentIdSchema, listAssessmentsSchema, proposeAssessmentSchema, reviewAssessmentSchema, saveAssessmentSchema } from './assessment-schemas';
+import { assessmentComparisonSchema, listAssessmentComparisonsSchema, publishAssessmentComparison, listAssessmentComparisons } from './assessment-comparisons';
 const server=new McpServer({name:'italiano-lab',version:'2.0.0'});
 const result=(value: unknown) => ({content:[{type:'text' as const,text:JSON.stringify(value)}]});
+server.registerTool('publish_assessment_comparison',{
+ description:'Publier une comparaison par notion entre deux bilans corrigés, dans l’ordre de leurs rendus. Relire les deux get_assessment. Vérifier des situations différentes, des exigences comparables et l’attribution explicite de chaque critère à la notion. Fournir une justification visible pour l’élève. Pour un critère observé, indiquer une tâche correspondante citée dans son retour. Omettre la tâche pour un critère non observé. Les résultats ne valent pas prérequis de leçon.',
+ inputSchema:assessmentComparisonSchema,
+},async v=>result(publishAssessmentComparison(v)));
+server.registerTool('list_assessment_comparisons',{
+ description:'Lire les comparaisons de mini-bilans publiées. Filtrer par notionId ou par comparisonId pour relire une publication précise.',
+ inputSchema:listAssessmentComparisonsSchema,
+},async v=>result(listAssessmentComparisons(v)));
 server.registerTool('save_assessment_draft',{
  description:'Créer ou remplacer un brouillon de mini-bilan écrit. Fournir un requestId stable, 1 ou 2 notions connues, des critères publics et leur grille privée. Terminer par une seule production libre. Préparer des consignes et situations inédites. Relire get_assessment avant de proposer.',
  inputSchema:saveAssessmentSchema,

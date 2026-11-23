@@ -282,6 +282,106 @@ test('un brouillon survit à un départ immédiat par le lien et par Retour du n
    }
    await expect.poll(response).toEqual({ kind: 'answer', value: text });
   });
+  const current = await (await request.get(base + '/api/assessment?id=' + assessmentId)).json();
+  const closed = await request.post(base + '/api/assessment-action', { headers: { origin: base }, data: {
+   assessmentId, requestId: 'v3-navigation-close', action: 'close', revision: current.revision,
+  } });
+  expect(closed.ok()).toBe(true);
+ } finally {
+  await client.close();
+ }
+});
+
+test('deux bilans corrigés sont comparés par notion via MCP et leurs sources sont accessibles', async ({ page, request }) => {
+ if (!process.env.ITALIANO_DB_PATH || !process.env.ITALIANO_TEST_CLOCK) throw new Error('Utilisez test:browser:isolated.');
+ const client = new Client({ name: 'v3-comparison-browser', version: '1' });
+ await client.connect(new StdioClientTransport({
+  command: '/bin/sh', args: ['scripts/mcp.sh'], env: process.env as Record<string, string>, stderr: 'pipe',
+ }));
+ const call = async (name: string, args: Record<string, unknown>) => {
+  const result = await client.callTool({ name, arguments: args });
+  const payload = (result.content as { text: string }[])[0].text;
+  if (result.isError) throw new Error(payload);
+  return JSON.parse(payload);
+ };
+ const action = async (input: object) => {
+  const response = await request.post(base + '/api/assessment-action', { headers: { origin: base }, data: input });
+  expect(response.ok()).toBe(true);
+  return response.json();
+ };
+ const notion = 'Justifier une décision à deux interlocuteurs';
+ const prompts = ['Expliquez à votre entraîneuse pourquoi le tournoi déménage.', 'Expliquez à un fournisseur pourquoi vous changez de point de collecte.'];
+ const subjects = ['Le tournoi change de terrain', 'Le point de collecte déménage'];
+ const contexts = ['Un changement pour une équipe de sport', 'Un changement pour une entreprise'];
+ try {
+  const { id: notionId } = await call('resolve_learning_notion', { requestId: 'v3b-browser-notion', name: notion });
+  const finished = [];
+  for (const index of [0, 1]) {
+   const key = 'v3b-fixture-' + index;
+   const draft = await call('save_assessment_draft', {
+    requestId: key + '-draft', title: subjects[index], objective: 'Justifier une décision.', reason: 'Réutiliser les liens de cause.',
+    notionIds: [notionId], estimatedMinutes: 10, criteria: [{ label: 'Expliquer la cause du changement', rubric: 'GRILLE_PRIVEE_V3B' }],
+    tasks: [
+     { type: 'cloze', instruction: 'Complétez.', content: index === 0 ? 'Abbiamo cambiato campo ___ del vento.' : 'Abbiamo spostato il ritiro ___ di un guasto.',
+      answer: { accepted: ['a causa'] } },
+     { type: 'free_text', instruction: 'Écrivez trois phrases.', content: prompts[index], answer: { criteria: 'GRILLE_PRIVEE_V3B' } },
+    ],
+   });
+   const assessmentId: string = draft.assessmentId;
+   await call('propose_assessment', { ...draft, requestId: key + '-offer' });
+   let { revision } = await action({ assessmentId, action: 'start', requestId: key + '-start' });
+   const { tasks } = await call('get_assessment', { assessmentId });
+   const [cloze, written] = tasks as { id: string }[];
+   ({ revision } = await action({ assessmentId, action: 'save', revision, taskId: cloze.id, requestId: key + '-cloze',
+    response: { kind: 'answer', value: 'a causa' } }));
+   ({ revision } = await action({ assessmentId, action: 'save', revision, taskId: written.id, requestId: key + '-written',
+    response: { kind: 'answer', value: index === 0 ? 'Cambiamo campo perché c’è vento. Giocheremo al coperto.' : 'Ritiriamo la merce altrove. La merce arriva domani.' } }));
+   await action({ assessmentId, action: 'submit', revision, requestId: key + '-submit' });
+   await call('publish_assessment_result', { assessmentId, requestId: key + '-review', report: {
+    strengths: 'Vous annoncez le changement.', fragile: 'La justification doit être explicite.',
+    nextAction: { description: 'Annoncez un changement à un autre interlocuteur.' },
+    tasks: [{ taskId: cloze.id, verdict: 'correct', explanation: 'Expression adaptée.' },
+     { taskId: written.id, verdict: index === 0 ? 'correct' : 'partial', explanation: 'Retour sur le texte.' }],
+    criteria: [{ position: 0, status: index === 0 ? 'observed_without_help' : 'needs_work', taskIds: [written.id],
+     explanation: index === 0 ? 'La cause est explicite.' : 'La cause reste implicite.' }],
+   } });
+   finished.push({ assessmentId, taskId: written.id });
+  }
+
+  const notionApi = base + '/api/notion-progress?notionId=' + notionId;
+  const before = await (await request.get(notionApi)).json();
+  const comparisonApi = base + '/api/assessment-comparisons?notionId=' + notionId;
+  expect(await (await request.get(comparisonApi)).json()).toEqual({ comparisons: [], nextOffset: null });
+  const args = { requestId: 'v3b-browser-compare', notionId, firstAssessmentId: finished[0].assessmentId,
+   secondAssessmentId: finished[1].assessmentId, firstContext: contexts[0], secondContext: contexts[1],
+   rationale: 'Une justification dans deux messages de longueur comparable à deux interlocuteurs différents.',
+   criteria: [{ firstPosition: 0, secondPosition: 0, firstTaskId: finished[0].taskId, secondTaskId: finished[1].taskId }],
+  };
+  const published = await call('publish_assessment_comparison', args);
+  expect(await call('publish_assessment_comparison', args)).toEqual(published);
+  const teacher = await call('list_assessment_comparisons', { comparisonId: published.id });
+  expect(teacher.comparisons[0].criteria[0].outcome).toBe('fragile');
+  const student = await request.get(comparisonApi);
+  expect(student.ok()).toBe(true);
+  expect(student.headers()['cache-control']).toBe('no-store');
+  const raw = await student.text();
+  expect(/GRILLE_PRIVEE_V3B|Cambiamo campo|suggestedGrade|answer_json/.test(raw)).toBe(false);
+  expect(await (await request.get(notionApi)).json()).toEqual(before);
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(base + '/mon-niveau');
+  const panel = page.getByRole('region', { name: 'Comparaisons de bilans' });
+  await expect(panel.getByRole('heading', { name: notion })).toBeVisible();
+  await expect(panel.getByText(contexts[0])).toBeVisible();
+  await expect(panel.getByText(contexts[1])).toBeVisible();
+  await expect(panel.getByText('La cause reste implicite.')).toBeVisible();
+  const source = panel.getByRole('link', { name: subjects[1] });
+  await source.focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('heading', { name: 'Retour du prof' })).toBeVisible();
+  await page.getByRole('link', { name: 'Tous les bilans' }).click();
+  await expect(panel.getByRole('link', { name: subjects[0] })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
  } finally {
   await client.close();
  }

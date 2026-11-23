@@ -77,7 +77,7 @@ test('migration des anciens exercices sans perte de réponses et retour au sché
     db.close();
     copyFileSync(join(dir,'test.sqlite'),join(dir,'backup.sqlite'));
     db=openDatabase();
-    assert.equal(db.prepare('SELECT COUNT(*) AS n FROM schema_migrations').get()?.n,14);
+    assert.equal(db.prepare('SELECT COUNT(*) AS n FROM schema_migrations').get()?.n,15);
     assert.equal(db.prepare('PRAGMA foreign_keys').get()?.foreign_keys,1);
     assert.deepEqual(db.prepare('PRAGMA foreign_key_check').all(),[]);
     db.close();

@@ -15,10 +15,10 @@ import { journal } from '../src/server/learning';
 const proactiveTables = ['learning_observations','proactive_lessons','proactive_lesson_evidence',
  'proactive_milestones','proactive_revision_links','proactive_milestone_attempts'];
 const emptyProgress = {item_version_notions:[],proactive_lesson_prerequisites:[]};
-const assessmentTables = ['assessments','assessment_notions','assessment_tasks','assessment_answers','assessment_results'];
+const assessmentTables = ['assessments','assessment_notions','assessment_tasks','assessment_answers','assessment_results','assessment_comparisons'];
 const emptyAssessments = Object.fromEntries(assessmentTables.map(name => [name, []]));
 const dropAssessments = assessmentTables.slice().reverse().map(name => 'DROP TABLE '+name+'; ').join('');
-const emptyV14 = {...Object.fromEntries(proactiveTables.map(name=>[name,[]])),correction_reads:[],...emptyProgress,...emptyAssessments};
+const emptyV15 = {...Object.fromEntries(proactiveTables.map(name=>[name,[]])),correction_reads:[],...emptyProgress,...emptyAssessments};
 const dropProgress = dropAssessments + 'DROP TABLE proactive_lesson_prerequisites; DROP TABLE item_version_notions;';
 
 function snapshot(d: Database, omitAvailability = false) {
@@ -46,8 +46,8 @@ for (const legacy of [true, false]) test(`V6 ${legacy ? 'ancienne' : 'actuelle'}
   if (!legacy) old.exec("UPDATE bank_items SET available=0 WHERE id='published-item'");
   const before = snapshot(old, legacy);
   const migrated = openDatabase(path);
-  assert.deepEqual(snapshot(migrated, legacy), { ...before, sentence_attempts: [], session_takeaways: [], session_difficulty: [], ...emptyV14 });
-  assert.equal(migrated.prepare('SELECT MAX(version) AS n FROM schema_migrations').get()?.n, 14);
+  assert.deepEqual(snapshot(migrated, legacy), { ...before, sentence_attempts: [], session_takeaways: [], session_difficulty: [], ...emptyV15 });
+  assert.equal(migrated.prepare('SELECT MAX(version) AS n FROM schema_migrations').get()?.n, 15);
   assert.equal(migrated.prepare('PRAGMA foreign_keys').get()?.foreign_keys, 1);
   assert.deepEqual(migrated.prepare('PRAGMA foreign_key_check').all(), []);
   assert.equal(migrated.prepare('PRAGMA integrity_check').get()?.integrity_check, 'ok');
@@ -93,7 +93,7 @@ test('V7 : échec après ALTER TABLE annule schéma et données, sauvegarde rest
   const restored = new DatabaseSync(join(dir, backups[0]));
   assert.deepEqual(snapshot(restored), before); restored.close();
   const retry = openDatabase(path);
-  assert.equal(retry.prepare('SELECT MAX(version) AS n FROM schema_migrations').get()?.n, 14);
+  assert.equal(retry.prepare('SELECT MAX(version) AS n FROM schema_migrations').get()?.n, 15);
   retry.close();
  } finally { rmSync(dir, { recursive: true, force: true }); }
 });
@@ -103,7 +103,7 @@ test('base neuve : V7 conserve le schéma V6 actuel sans sauvegarde inutile', ()
  const dir = mkdtempSync(join(tmpdir(), 'italiano-v7-new-'));
  try {
   const d = openDatabase(join(dir, 'db.sqlite'));
-  assert.equal(d.prepare('SELECT MAX(version) AS n FROM schema_migrations').get()?.n, 14);
+  assert.equal(d.prepare('SELECT MAX(version) AS n FROM schema_migrations').get()?.n, 15);
   const available = d.prepare('PRAGMA table_info(bank_items)').all().find((c: { name: string }) => c.name === 'available');
   assert.equal(available?.dflt_value, '1');
   assert.equal(available?.notnull, 1);
@@ -136,7 +136,7 @@ test('V8 : la migration depuis V7 conserve les données et sauvegarde le schéma
   const before = snapshot(v7);
   v7.close();
   const upgraded = openDatabase(path);
-  assert.deepEqual(snapshot(upgraded), {...before,sentence_attempts:[],session_takeaways:[],session_difficulty:[],...emptyV14});
+  assert.deepEqual(snapshot(upgraded), {...before,sentence_attempts:[],session_takeaways:[],session_difficulty:[],...emptyV15});
   assert.deepEqual(upgraded.prepare('PRAGMA foreign_key_check').all(), []);
   upgraded.close();
   const backups = readdirSync(dir).filter(name => name.includes('.before-sentences-'));
@@ -168,8 +168,8 @@ test('V9 : les anciennes séances gardent leurs réponses et leurs clés de cré
   v8.close();
 
   const upgraded = openDatabase(path);
-  assert.equal(upgraded.prepare('SELECT MAX(version) AS n FROM schema_migrations').get()?.n, 14);
-  assert.deepEqual(snapshot(upgraded), {...before,session_takeaways:[],session_difficulty:[],...emptyV14});
+  assert.equal(upgraded.prepare('SELECT MAX(version) AS n FROM schema_migrations').get()?.n, 15);
+  assert.deepEqual(snapshot(upgraded), {...before,session_takeaways:[],session_difficulty:[],...emptyV15});
   upgraded.close();
   const session = getSession('published', true);
   assert.deepEqual(session.takeaways, []);
@@ -206,7 +206,7 @@ test('V6 ancienne : dailyPlan et journal retrouvent seulement les items exposés
   assert.deepEqual(d.prepare('SELECT id,available FROM bank_items ORDER BY id').all().map((r: { id: string; available: number }) => [r.id, r.available]), [
    ['draft-item', 0], ['legacy:series:practice-only', 1], ['practiced-draft', 1], ['published-item', 1], ['standalone', 0],
   ]);
-  assert.equal(d.prepare('SELECT MAX(version) AS n FROM schema_migrations').get()?.n, 14);
+  assert.equal(d.prepare('SELECT MAX(version) AS n FROM schema_migrations').get()?.n, 15);
   assert.throws(() => d.exec("UPDATE bank_items SET available=2 WHERE id='draft-item'"), /CHECK constraint failed/);
   d.close();
   const created = createBankExercise({ requestId: 'after-v7', exercise: { type: 'cloze', instruction: 'Complétez', items: [{ content: 'Nouveau ___', answer: { accepted: ['ciao'] } }] } });
@@ -232,8 +232,8 @@ test('V11 additive depuis V10 : séances, tentatives, difficulté et suivi conse
   historical.close();
   for (let pass=0;pass<2;pass++) {
    const migrated=openDatabase(path);
-   assert.deepEqual(snapshot(migrated),{...before,...emptyV14});
-   assert.equal(migrated.prepare('SELECT MAX(version) AS n FROM schema_migrations').get()?.n,14);
+   assert.deepEqual(snapshot(migrated),{...before,...emptyV15});
+   assert.equal(migrated.prepare('SELECT MAX(version) AS n FROM schema_migrations').get()?.n,15);
    assert.deepEqual(migrated.prepare('PRAGMA foreign_key_check').all(),[]);
    migrated.close();
   }
@@ -258,7 +258,7 @@ test('V12 depuis V11 conserve l’historique et part sans accusé de lecture',()
   for (let pass=0;pass<2;pass++) {
    const migrated=openDatabase(path);
    assert.deepEqual(snapshot(migrated),{...before,correction_reads:[],...emptyProgress,...emptyAssessments});
-   assert.equal(migrated.prepare('SELECT MAX(version) AS n FROM schema_migrations').get()?.n,14);
+   assert.equal(migrated.prepare('SELECT MAX(version) AS n FROM schema_migrations').get()?.n,15);
    assert.deepEqual(migrated.prepare('PRAGMA foreign_key_check').all(),[]);
    migrated.close();
   }
@@ -287,7 +287,7 @@ test('V13 depuis V12 fige les notions connues et conserve les leçons, preuves e
   for (let pass=0;pass<2;pass++) {
    const migrated=openDatabase(path);
    assert.deepEqual(snapshot(migrated),{...before,...emptyProgress,...emptyAssessments,item_version_notions:[{version_id:'initial:published-item',notion_id:'temps'}]});
-   assert.equal(migrated.prepare('SELECT MAX(version) AS n FROM schema_migrations').get()?.n,14);
+   assert.equal(migrated.prepare('SELECT MAX(version) AS n FROM schema_migrations').get()?.n,15);
    assert.deepEqual(migrated.prepare('PRAGMA foreign_key_check').all(),[]);
    migrated.close();
   }
@@ -307,13 +307,13 @@ test('V14 depuis V13 sauvegarde le WAL et préserve les activités et les relati
   createV6(path).close();
   const previous = openDatabase(path);
   try {
-   previous.exec(dropAssessments + "DELETE FROM schema_migrations WHERE version=14; PRAGMA wal_autocheckpoint=0; UPDATE sessions SET title='Contenu WAL conservé' WHERE id='published'");
+   previous.exec(dropAssessments + "DELETE FROM schema_migrations WHERE version>=14; PRAGMA wal_autocheckpoint=0; UPDATE sessions SET title='Contenu WAL conservé' WHERE id='published'");
    const before = snapshot(previous);
    for (let pass = 0; pass < 2; pass++) {
     const migrated = openDatabase(path);
     try {
      assert.deepEqual(snapshot(migrated), { ...before, ...emptyAssessments });
-     assert.equal(migrated.prepare('SELECT MAX(version) AS n FROM schema_migrations').get()?.n, 14);
+     assert.equal(migrated.prepare('SELECT MAX(version) AS n FROM schema_migrations').get()?.n, 15);
      assert.deepEqual(migrated.prepare('PRAGMA foreign_key_check').all(), []);
     } finally { migrated.close(); }
    }
@@ -327,5 +327,40 @@ test('V14 depuis V13 sauvegarde le WAL et préserve les activités et les relati
     assert.equal(backup.prepare('SELECT MAX(version) AS n FROM schema_migrations').get()?.n, 13);
    } finally { backup.close(); }
   } finally { previous.close(); }
+ } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('V15 depuis V14 sauvegarde les bilans déjà rendus et leurs résultats', () => {
+ const dir = mkdtempSync(join(tmpdir(), 'italiano-v14-backup-'));
+ const path = join(dir, 'db.sqlite');
+ try {
+  const previous = openDatabase(path);
+  const stamp = '2026-03-04T12:00:00Z';
+  previous.exec('DROP TABLE assessment_comparisons; DELETE FROM schema_migrations WHERE version=15');
+  previous.prepare(`INSERT INTO assessments (id,status,title,objective,reason,estimated_minutes,criteria_json,created_at,offered_at,started_at,submitted_at)
+   VALUES ('completed','reviewed','Le changement','Raconter','Transfert',10,'[]',?,?,?,?)`).run(stamp, stamp, stamp, stamp);
+  previous.prepare("INSERT INTO assessment_tasks VALUES ('written','completed',0,'{}')").run();
+  previous.prepare("INSERT INTO assessment_answers VALUES ('written',?)").run(JSON.stringify({ kind: 'answer', value: 'Ho cambiato orario.' }));
+  previous.prepare("INSERT INTO assessment_results VALUES ('completed',?,'{}')").run(stamp);
+  const before = snapshot(previous);
+  previous.close();
+
+  for (let pass = 0; pass < 2; pass++) {
+   const migrated = openDatabase(path);
+   try {
+    assert.deepEqual(snapshot(migrated), { ...before, assessment_comparisons: [] });
+    assert.equal(migrated.prepare('SELECT MAX(version) AS n FROM schema_migrations').get()?.n, 15);
+    assert.deepEqual(migrated.prepare('PRAGMA foreign_key_check').all(), []);
+   } finally { migrated.close(); }
+  }
+  const backups = readdirSync(dir).filter(name => name.includes('.before-assessment-comparisons-'));
+  assert.equal(backups.length, 1);
+  const backupPath = join(dir, backups[0]);
+  assert.equal(statSync(backupPath).mode & 0o777, 0o600);
+  const backup = new DatabaseSync(backupPath);
+  try {
+   assert.deepEqual(snapshot(backup), before);
+   assert.equal(backup.prepare('SELECT MAX(version) AS n FROM schema_migrations').get()?.n, 14);
+  } finally { backup.close(); }
  } finally { rmSync(dir, { recursive: true, force: true }); }
 });

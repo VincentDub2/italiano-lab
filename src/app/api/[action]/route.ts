@@ -7,6 +7,7 @@ import { getToday } from '@/server/today';
 import { getStudentAttempt, getStudentCorrection, markCorrectionRead } from '@/server/student-corrections';
 import { listStudentNotionProgress } from '@/server/notion-progress';
 import { actOnAssessment, getStudentAssessment, listStudentAssessments, StudentAssessmentError } from '@/server/assessments';
+import { listAssessmentComparisons } from '@/server/assessment-comparisons';
 export const runtime='nodejs';
 export const dynamic='force-dynamic';
 const noStore = {headers:{'Cache-Control':'no-store'}};
@@ -17,6 +18,11 @@ function assessmentError(cause: unknown) {
 }
 function error() { return NextResponse.json({error:'Requête invalide ou ressource inconnue.'},{status:400}); }
 export async function GET(request: NextRequest, context: {params: Promise<{action:string}>}) { try {const {action}=await context.params; const url=request.nextUrl;
+ if(action==='assessment-comparisons') return NextResponse.json(listAssessmentComparisons({
+  notionId:url.searchParams.get('notionId') ?? undefined,
+  comparisonId:url.searchParams.get('comparisonId') ?? undefined,
+  offset:url.searchParams.has('offset') ? Number(url.searchParams.get('offset')) : undefined,
+ }),noStore);
  if(action==='assessments') return NextResponse.json(listStudentAssessments(),noStore);
  if(action==='assessment') return NextResponse.json(getStudentAssessment(url.searchParams.get('id') ?? ''),noStore);
  if(action==='today') return NextResponse.json(await getToday(),{headers:{'Cache-Control':'no-store'}}); if(action==='attempt-detail') return NextResponse.json(getStudentAttempt(url.searchParams.get('id') ?? ''),{headers:{'Cache-Control':'no-store'}}); if(action==='notion-progress') return NextResponse.json(listStudentNotionProgress({notionId:url.searchParams.get('notionId') ?? undefined,offset:url.searchParams.has('offset') ? Number(url.searchParams.get('offset')) : undefined}),{headers:{'Cache-Control':'no-store'}}); if(action==='correction') return NextResponse.json(getStudentCorrection(url.searchParams.get('id') ?? ''),{headers:{'Cache-Control':'no-store'}}); if(action==='practice-bank') return NextResponse.json({questions:bank(), ...practiceSummary(), overview:learningOverview()}); if(action==='practice-series') return NextResponse.json(getPracticeSeries(url.searchParams.get('id') ?? '')); if(action==='learning-overview') return NextResponse.json(learningOverview()); if(action==='errors') return NextResponse.json(journal(Object.fromEntries(url.searchParams)));  if(action==='lessons') return NextResponse.json(listStudentLessons()); if(action==='lesson') return NextResponse.json(getStudentLesson(url.searchParams.get('id') ?? '')); if(action==='sessions') {seedDemo(); return NextResponse.json(listSessions(true));} if(action==='session') return NextResponse.json(getSession(url.searchParams.get('id') ?? '',true)); if(action==='feedback') return NextResponse.json(feedbackList()); if(action==='vocabulary') return NextResponse.json(vocabulary()); return NextResponse.json({error:'Introuvable'},{status:404});} catch (cause) {return assessmentError(cause);} }

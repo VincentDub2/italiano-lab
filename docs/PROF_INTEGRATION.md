@@ -1,6 +1,6 @@
 # Intégration du professeur
 
-Le serveur fournit les outils de séance, de banque et de suivi, ainsi que six outils pour les observations et les leçons proactives. La migration courante est la version 14. Les [contrats V3A](PROF_PROACTIF_V3A.md) décrivent les mini-bilans écrits. `list_notion_progress` expose le bilan daté et les preuves admissibles pour les leçons de progression. Le [rapport V1](PROF_PROACTIF_V1.md) décrit les contrats et les étapes d’activation.
+Le serveur fournit les outils de séance, de banque et de suivi, ainsi que six outils pour les observations et les leçons proactives. La migration courante est la version 15. Les [contrats V3A](PROF_PROACTIF_V3A.md) décrivent les mini-bilans écrits. Les [contrats V3B](PROF_PROACTIF_V3B.md) décrivent leur comparaison par notion. `list_notion_progress` expose le bilan daté et les preuves admissibles pour les leçons de progression. Le [rapport V1](PROF_PROACTIF_V1.md) décrit les contrats et les étapes d’activation.
 
 Le profil Hermes, ses autorisations d’outils et ses crons n’ont pas été modifiés pendant cette implémentation. Leur état d’exploitation antérieurement documenté n’a pas été revérifié. Appliquer séparément [les changements Hermes](HERMES_BANK_CHANGES.md) et les nouvelles [consignes quotidiennes](../automation/daily-prof-bank.md) avant d’attendre de la routine qu’elle compose ses séances depuis la banque. Le Mac et les services locaux doivent être actifs.
 

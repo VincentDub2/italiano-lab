@@ -5,6 +5,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { migrateBank } from './bank-migration.mjs';
 import { migrateProactive } from './proactive-migration.mjs';
+import { migrateAssessmentComparisons } from './assessment-comparison-migration.mjs';
 import { migrateAssessments } from './assessment-migration.mjs';
 import { migrateNotionProgress } from './notion-migration.mjs';
 
@@ -23,13 +24,14 @@ export function openDatabase(path = databasePath()) {
     db.exec('PRAGMA busy_timeout = 5000; PRAGMA foreign_keys = ON;');
     if (db.prepare('PRAGMA journal_mode').get().journal_mode !== 'wal') db.exec('PRAGMA journal_mode = WAL');
     const hasMigrations = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='schema_migrations'").get();
-    if (hasMigrations && db.prepare('SELECT version FROM schema_migrations WHERE version=14').get()) {
+    if (hasMigrations && db.prepare('SELECT version FROM schema_migrations WHERE version=15').get()) {
       try { chmodSync(path, 0o600); } catch { /* Permissions may be managed by the filesystem. */ }
       return db;
     }
     const needsQuestionnaire = !hasMigrations || !db.prepare('SELECT version FROM schema_migrations WHERE version=3').get();
     if (hasMigrations) {
-      const kind = db.prepare('SELECT version FROM schema_migrations WHERE version=13').get() ? 'assessments'
+      const kind = db.prepare('SELECT version FROM schema_migrations WHERE version=14').get() ? 'assessment-comparisons'
+        : db.prepare('SELECT version FROM schema_migrations WHERE version=13').get() ? 'assessments'
         : db.prepare('SELECT version FROM schema_migrations WHERE version=12').get() ? 'notion-progress'
         : db.prepare('SELECT version FROM schema_migrations WHERE version=11').get() ? 'correction-reads'
         : db.prepare('SELECT version FROM schema_migrations WHERE version=10').get() ? 'proactive-lessons'
@@ -127,6 +129,7 @@ export function openDatabase(path = databasePath()) {
       }
       if (!db.prepare('SELECT version FROM schema_migrations WHERE version=13').get()) migrateNotionProgress(db);
       if (!db.prepare('SELECT version FROM schema_migrations WHERE version=14').get()) migrateAssessments(db);
+      if (!db.prepare('SELECT version FROM schema_migrations WHERE version=15').get()) migrateAssessmentComparisons(db);
       if (db.prepare('PRAGMA foreign_key_check').all().length) throw new Error('Migration refusée : références incohérentes.');
       db.exec('COMMIT');
     } catch (error) { db.exec('ROLLBACK'); throw error; }

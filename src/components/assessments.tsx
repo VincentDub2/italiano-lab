@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from '
 import type { AssessmentResponse, AssessmentStatus, studentAssessmentActionSchema } from '@/server/assessment-schemas';
 import type { StudentAssessment, StudentAssessmentSummary } from '@/server/assessments';
 import type { z } from 'zod';
+import { AssessmentComparisonsPanel } from './assessment-comparisons';
 import { forgetAssessmentDraft, getAssessmentDraft } from './assessment-draft';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
@@ -116,6 +117,7 @@ export function Assessments() {
     {history.map(assessment => <AssessmentCard key={assessment.id} assessment={assessment}/>)}
    </ul>
   </section>}
+  <AssessmentComparisonsPanel showEmpty/>
  </div>;
 }
 

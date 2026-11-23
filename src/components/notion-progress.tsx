@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowRight } from 'lucide-react';
 import type { NotionStatus, StudentNotionProgress } from '@/server/notion-progress';
+import { AssessmentComparisonsPanel } from './assessment-comparisons';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
@@ -111,5 +112,6 @@ export function NotionProgress() {
    {report?.nextOffset!=null && !error && <Button type="button" className="mt-4" variant="outline" disabled={loading}
     onClick={()=>void load(report.nextOffset!)}>{loading?'Chargement…':'Afficher d’autres notions'}</Button>}
   </section>
+  <AssessmentComparisonsPanel/>
  </>;
 }

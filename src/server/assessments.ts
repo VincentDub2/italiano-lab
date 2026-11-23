@@ -84,23 +84,23 @@ export function saveAssessment(input: unknown) {
  }));
 }
 
-function normalizedPrompt(value: string) {
+export function normalizedAssessmentPrompt(value: string) {
  return value.normalize('NFKD').toLocaleLowerCase('it').replace(/[^\p{L}\p{N}]/gu, '');
 }
 
 function checkNovelty(db: Database, assessmentId: string) {
  const known = new Set<string>();
- const orderFingerprint = (tokens: string[]) => tokens.map(normalizedPrompt).sort().join('|');
+ const orderFingerprint = (tokens: string[]) => tokens.map(normalizedAssessmentPrompt).sort().join('|');
  // Include older and currently accessible versions, even when there is no recorded attempt.
  for (const row of db.prepare('SELECT content FROM item_versions UNION SELECT content FROM exercises').iterate()) {
-  known.add(normalizedPrompt(String(row.content)));
+  known.add(normalizedAssessmentPrompt(String(row.content)));
  }
  for (const row of db.prepare("SELECT answer_json FROM item_versions WHERE type='sentence'").iterate()) {
   const sentence = sentenceSchema.safeParse(JSON.parse(String(row.answer_json)));
   if (sentence.success && sentence.data.format === 'word_order') known.add(orderFingerprint(sentence.data.tokens));
  }
  const taskFingerprints = (task: AssessmentTask) => {
-  const content = normalizedPrompt(task.content);
+  const content = normalizedAssessmentPrompt(task.content);
   const tokens = wordTokens(task);
   return tokens ? [content, orderFingerprint(tokens)] : [content];
  };
@@ -108,11 +108,11 @@ function checkNovelty(db: Database, assessmentId: string) {
   JOIN assessments a ON a.id=t.assessment_id WHERE a.id<>? AND a.started_at IS NOT NULL`).iterate(assessmentId)) {
   const task = JSON.parse(String(row.definition_json)) as AssessmentTask;
   for (const fingerprint of taskFingerprints(task)) known.add(fingerprint);
-  if (task.support) known.add(normalizedPrompt(task.support));
+  if (task.support) known.add(normalizedAssessmentPrompt(task.support));
  }
  for (const { definition } of assessmentTasks(db, assessmentId)) {
   const fingerprints = taskFingerprints(definition);
-  const support = definition.support && normalizedPrompt(definition.support);
+  const support = definition.support && normalizedAssessmentPrompt(definition.support);
   if (fingerprints.some(fingerprint => !fingerprint || known.has(fingerprint)) || (support && known.has(support))) {
    throw new Error('Un énoncé a déjà été utilisé, ou ne permet pas de vérifier sa nouveauté.');
   }
@@ -197,6 +197,15 @@ function assessmentResult(db: Database, assessmentId: string) {
  return {
   ...report, reviewedAt: String(row.reviewed_at),
   nextAction: { description, lessonHref: lessonId ? '/lecons/' + encodeURIComponent(lessonId) : null },
+ };
+}
+
+export function reviewedAssessmentForComparison(db: Database, assessmentId: string) {
+ const row = assessmentRow(db, assessmentId);
+ if (row.status !== 'reviewed' || !row.submitted_at || !row.started_at) throw new Error('Les deux bilans doivent être corrigés.');
+ return {
+  startedAt: row.started_at, submittedAt: row.submitted_at, notions: assessmentNotions(db, row.id),
+  criteria: assessmentCriteria(row), tasks: assessmentTasks(db, row.id), result: assessmentResult(db, row.id),
  };
 }
 
