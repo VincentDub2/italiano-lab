@@ -191,3 +191,98 @@ test('mini-bilan proposé, réalisé sans aide et corrigé via le vrai prof MCP'
   await client.close();
  }
 });
+
+test('un brouillon survit à un départ immédiat par le lien et par Retour du navigateur', async ({ page, request }) => {
+ if (!process.env.ITALIANO_DB_PATH || !process.env.ITALIANO_TEST_CLOCK) throw new Error('Utilisez test:browser:isolated.');
+ const client = new Client({ name: 'v3-draft-navigation-test', version: '1' });
+ await client.connect(new StdioClientTransport({
+  command: '/bin/sh', args: ['scripts/mcp.sh'], env: process.env as Record<string, string>, stderr: 'pipe',
+ }));
+ const call = async (name: string, args: Record<string, unknown>) => {
+  const result = await client.callTool({ name, arguments: args });
+  const payload = (result.content as { text: string }[])[0].text;
+  if (result.isError) throw new Error(payload);
+  return JSON.parse(payload);
+ };
+ const subject = 'Réagir à une livraison reportée';
+ const list = base + '/mon-niveau/bilans';
+ try {
+  const { id: notionId } = await call('resolve_learning_notion', { requestId: 'v3-navigation-notion', name: 'Prévenir du report d’une livraison' });
+  const { assessmentId, revision } = await call('save_assessment_draft', {
+   requestId: 'v3-navigation-draft', title: subject, reason: 'Réutiliser le passé dans une situation nouvelle.',
+   objective: 'Prévenir du changement de livraison.', estimatedMinutes: 10, notionIds: [notionId],
+   criteria: [{ label: 'Expliquer le retard', rubric: 'Relier la cause au changement.' }],
+   tasks: [
+    { type: 'cloze', instruction: 'Complétez.', content: 'Il pacco ___ con un giorno di ritardo.', answer: { accepted: ['è arrivato'] } },
+    { type: 'free_text', instruction: 'Écrivez trois phrases.', content: 'Prévenez Dario que la livraison de la serre est reportée.',
+     answer: { criteria: 'Expliquer le retard et proposer un horaire.' } },
+   ],
+  });
+  await call('propose_assessment', { requestId: 'v3-navigation-propose', assessmentId, revision });
+  await page.goto(list);
+  await page.getByRole('link', { name: subject }).click();
+  await page.getByRole('button', { name: 'Commencer', exact: true }).click();
+  const input = page.getByRole('textbox', { name: 'Votre production' });
+  await expect(input).toBeVisible();
+
+  const response = async () => {
+   const detail = await request.get(base + '/api/assessment?id=' + assessmentId);
+   expect(detail.ok()).toBe(true);
+   const view = await detail.json();
+   return view.tasks.find((task: { type: string }) => task.type === 'free_text').response;
+  };
+  const actionUrl = '**/api/assessment-action';
+  const cases = [
+   { name: 'Tous les bilans', leave: () => page.getByRole('link', { name: 'Tous les bilans' }).click(), text: 'Il camion ha avuto un guasto.' },
+   { name: 'Retour du navigateur', leave: () => page.goBack(), text: 'Il camion ha avuto un guasto. La consegna arriva domani.' },
+  ];
+  for (const { name, leave, text } of cases) {
+   await test.step(name, async () => {
+    let release!: () => void;
+    const paused = new Promise<void>(resolve => { release = resolve; });
+    await page.route(actionUrl, async route => {
+     if (route.request().postDataJSON()?.action === 'save') await paused;
+     await route.continue();
+    });
+    try {
+     await input.fill(text);
+     await leave();
+     await expect(page).toHaveURL(list);
+     await page.getByRole('link', { name: subject }).click();
+     await expect(input).toHaveValue(text, { timeout: 2000 });
+     expect(await response()).not.toEqual({ kind: 'answer', value: text });
+    } finally {
+     release();
+     await page.unroute(actionUrl);
+    }
+    await expect.poll(response).toEqual({ kind: 'answer', value: text });
+    await expect(page.getByText('Enregistré', { exact: true })).toBeVisible();
+   });
+  }
+  await test.step('Le rechargement avertit tant que SQLite n’a pas confirmé', async () => {
+   let release!: () => void;
+   const paused = new Promise<void>(resolve => { release = resolve; });
+   await page.route(actionUrl, async route => {
+    if (route.request().postDataJSON()?.action === 'save') await paused;
+    await route.continue();
+   });
+   const text = 'La consegna è stata rinviata a venerdì.';
+   try {
+    await input.fill(text);
+    const warning = page.waitForEvent('dialog', { timeout: 3000 }).then(async dialog => {
+     const type = dialog.type();
+     await dialog.dismiss();
+     expect(type).toBe('beforeunload');
+    });
+    await Promise.all([warning, page.evaluate(() => window.location.reload())]);
+    await expect(input).toHaveValue(text);
+   } finally {
+    release();
+    await page.unroute(actionUrl);
+   }
+   await expect.poll(response).toEqual({ kind: 'answer', value: text });
+  });
+ } finally {
+  await client.close();
+ }
+});

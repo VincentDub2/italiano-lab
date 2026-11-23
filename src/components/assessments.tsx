@@ -2,10 +2,11 @@
 
 import Link from 'next/link';
 import { ArrowLeft, ArrowRight } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type { AssessmentResponse, AssessmentStatus, studentAssessmentActionSchema } from '@/server/assessment-schemas';
 import type { StudentAssessment, StudentAssessmentSummary } from '@/server/assessments';
 import type { z } from 'zod';
+import { forgetAssessmentDraft, getAssessmentDraft } from './assessment-draft';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
@@ -23,9 +24,6 @@ type Receipt = { revision: number; status: AssessmentStatus };
 type Reviewed = Extract<StudentAssessment, { status: 'reviewed' }>;
 type Running = Extract<StudentAssessment, { status: 'in_progress' }>;
 type Task = Running['tasks'][number];
-type Responses = Record<string, AssessmentResponse | null>;
-type DraftChange = { taskId: string; response: AssessmentResponse | null };
-type Save = Extract<Command, { action: 'save' }>;
 
 class AssessmentRequestError extends Error {
  constructor(message: string, readonly status: number) { super(message); }
@@ -132,7 +130,7 @@ function TaskPrompt({ task }: { task: Task }) {
 function TaskInput({ task, index, response, onChange }: {
  task: Task; index: number; response: AssessmentResponse | null; onChange: (response: AssessmentResponse | null) => void;
 }) {
- const [raw, setRaw] = useState(task.response?.kind === 'answer' && typeof task.response.value === 'string' ? task.response.value : '');
+ const [raw, setRaw] = useState(response?.kind === 'answer' && typeof response.value === 'string' ? response.value : '');
  const unknown = response?.kind === 'unknown';
  const value = response?.kind === 'answer' ? response.value : null;
  const order = Array.isArray(value) ? value : [];
@@ -175,70 +173,11 @@ function TaskInput({ task, index, response, onChange }: {
  </Card>;
 }
 
-function sameResponse(a: AssessmentResponse | null, b: AssessmentResponse | null) {
- return JSON.stringify(a) === JSON.stringify(b);
-}
-function persistedResponses(tasks: Task[]): Responses {
- return Object.fromEntries(tasks.map(task => [task.id, task.response]));
-}
-
-function useDraft(assessment: Running) {
- const [draft, setDraft] = useState(() => persistedResponses(assessment.tasks));
- const [saved, setSaved] = useState(() => persistedResponses(assessment.tasks));
- const [revision, setRevision] = useState(assessment.revision);
- const [pending, setPending] = useState<Save | null>(null);
- const [failure, setFailure] = useState<{ message: string; stale: boolean } | null>(null);
- const sending = useRef(false);
- const change = assessment.tasks.find(task => !sameResponse(draft[task.id], saved[task.id]));
- const dirty = !!change || !!pending;
-
- const persist = useCallback(async (command: Save) => {
-  if (sending.current) return;
-  sending.current = true;
-  setPending(command);
-  setFailure(null);
-  try {
-   const receipt = await send(command);
-   setSaved(previous => ({ ...previous, [command.taskId]: command.response }));
-   setRevision(receipt.revision);
-   setPending(null);
-  } catch (cause) {
-   setFailure(cause instanceof AssessmentRequestError
-    ? { message: cause.message, stale: cause.status === 409 }
-    : { message: 'L’enregistrement a échoué. Réessayez.', stale: false });
-  } finally {
-   sending.current = false;
-  }
- }, []);
-
- const taskId = change?.id;
- const response = taskId ? draft[taskId] : null;
- useEffect(() => {
-  if (!taskId || pending) return;
-  const timer = window.setTimeout(() => void persist({
-   action: 'save', assessmentId: assessment.id, requestId: crypto.randomUUID(), revision, taskId, response,
-  }), 300);
-  return () => window.clearTimeout(timer);
- }, [taskId, response, pending, persist, assessment.id, revision]);
-
- useEffect(() => {
-  if (!dirty) return;
-  const onUnload = (event: BeforeUnloadEvent) => event.preventDefault();
-  window.addEventListener('beforeunload', onUnload);
-  return () => window.removeEventListener('beforeunload', onUnload);
- }, [dirty]);
-
- return {
-  draft, revision, dirty, failure, hasSaved: revision !== assessment.revision || Object.values(saved).some(Boolean),
-  edit: ({ taskId, response }: DraftChange) => setDraft(values => ({ ...values, [taskId]: response })),
-  retry: () => { if (pending) void persist(pending); },
- };
-}
-
 function RunningAssessment({ assessment, mutate, busy, refresh }: {
- assessment: Running; mutate: (command: Command) => void; busy: boolean; refresh: () => void;
+ assessment: Running; mutate: (command: Command) => void; busy: boolean; refresh: (discard: () => void) => void;
 }) {
- const { draft, revision, dirty, failure, hasSaved, edit, retry } = useDraft(assessment);
+ const [store] = useState(() => getAssessmentDraft(assessment, send));
+ const { draft, revision, dirty, failure, hasSaved } = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
  const ready = assessment.tasks.every(task => {
   const answer = draft[task.id];
   return answer?.kind === 'unknown' || (answer?.kind === 'answer' && (!task.tokens || answer.value.length === task.tokens.length));
@@ -247,11 +186,13 @@ function RunningAssessment({ assessment, mutate, busy, refresh }: {
  return <>
   <p className="m-0 text-sm text-muted-foreground">Faites les tâches sans aide. Vos réponses sont enregistrées au fur et à mesure pour vous permettre de reprendre plus tard.</p>
   <fieldset className="grid min-w-0 gap-4" aria-label="Tâches du bilan" disabled={busy || !!failure?.stale}>
-   {assessment.tasks.map((task, index) => <TaskInput key={task.id} task={task} index={index} response={draft[task.id]} onChange={response => edit({ taskId: task.id, response })}/>)}
+   {assessment.tasks.map((task, index) => <TaskInput key={task.id} task={task} index={index} response={draft[task.id]} onChange={response => store.edit(task.id, response)}/>)}
   </fieldset>
   {failure ? <div className="flex flex-wrap items-center gap-3">
-   <p role="alert" className="m-0 text-sm text-destructive">{failure.message}</p>
-   <Button variant="outline" onClick={failure.stale ? refresh : retry}>{failure.stale ? 'Actualiser' : 'Réessayer l’enregistrement'}</Button>
+   <p role="alert" className="m-0 text-sm text-destructive">
+    {failure.message}{failure.stale && ' L’actualisation remplacera les modifications non enregistrées par les réponses du serveur.'}
+   </p>
+   <Button variant="outline" disabled={busy} onClick={failure.stale ? () => refresh(store.discard) : store.retry}>{failure.stale ? 'Actualiser' : 'Réessayer l’enregistrement'}</Button>
   </div> : <p role="status" className="m-0 min-h-5 text-sm text-muted-foreground">
    {dirty ? 'Enregistrement…' : hasSaved ? 'Enregistré' : ''}
   </p>}
@@ -350,7 +291,8 @@ export function AssessmentDetail({ id }: { id: string }) {
   setBusy(true);
   setFailure(null);
   try {
-   await send(command);
+   const receipt = await send(command);
+   if (receipt.status === 'submitted' || receipt.status === 'abandoned') forgetAssessmentDraft(id);
    setValue(await request<StudentAssessment>(detailUrl(id)));
   } catch (cause) {
    setFailure({ command,
@@ -362,12 +304,13 @@ export function AssessmentDetail({ id }: { id: string }) {
    setBusy(false);
   }
  };
- const refresh = async () => {
+ const refresh = async (discard?: () => void) => {
   setBusy(true);
   setRefreshError(false);
   try {
    const latest = await request<StudentAssessment>(detailUrl(id));
    setFailure(null);
+   discard?.();
    setValue(latest);
   } catch {
    setRefreshError(true);
@@ -417,7 +360,7 @@ export function AssessmentDetail({ id }: { id: string }) {
     </Card>}
    </>}
    {assessment.status === 'in_progress' && <RunningAssessment key={assessment.revision} assessment={assessment}
-    busy={busy || !!failure} mutate={command => void mutate(command)} refresh={() => void refresh()}/>}
+    busy={busy || !!failure} mutate={command => void mutate(command)} refresh={discard => void refresh(discard)}/>}
    {assessment.status === 'submitted' && <Card className="gap-3 p-4 shadow-none sm:p-6">
     <p className="m-0">Bilan rendu le {dateLabel.format(new Date(assessment.submittedAt!))}. Le retour complet apparaîtra ici après la correction du prof.</p>
     <Button className="w-fit" variant="outline" disabled={busy} onClick={() => void refresh()}>Vérifier si le retour est prêt</Button>
