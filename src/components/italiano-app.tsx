@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowRight, BookOpen, CalendarDays, Dumbbell, Headphones, Layers, Leaf, Upload, Volume2 } from 'lucide-react';
 import { Today } from '@/components/today';
+import { AssessmentDetail, Assessments } from '@/components/assessments';
 import { NotionProgress } from '@/components/notion-progress';
 import { AttemptDetail } from '@/components/attempt-detail';
 import { CorrectionDetail } from '@/components/correction-detail';
@@ -15,7 +16,7 @@ import { ErrorJournal } from '@/components/error-journal';
 import { Practice } from '@/components/practice';
 import { dueCards, emptyData, mergeImported, normalize, parseMarkdown, readData, type Card, type Data, type Rating } from '@/lib/study';
 
-type Page = 'today' | 'review' | 'vocabulary' | 'difficulties' | 'sources' | 'corrections' | 'practice' | 'errors' | 'lessons' | 'level' | 'correction' | 'session' | 'attempt';
+type Page = 'today' | 'review' | 'vocabulary' | 'difficulties' | 'sources' | 'corrections' | 'practice' | 'errors' | 'lessons' | 'level' | 'correction' | 'session' | 'attempt' | 'assessments';
 type Mode = 'due' | 'all' | 'difficult';
 const primaryNav = [
  {id:'today',label:'Aujourd’hui',href:'/',icon:CalendarDays},
@@ -33,8 +34,8 @@ const secondaryNav = [
 ] as const;
 const navigationStyle = 'flex items-center gap-2 rounded-md px-2.5 py-2 text-sm whitespace-nowrap text-muted-foreground hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring aria-[current=page]:bg-accent aria-[current=page]:font-semibold aria-[current=page]:text-primary';
 const ratings: { id: Rating; label: string; interval: string }[] = [{id:'again',label:'À revoir',interval:'10 min'}, {id:'hard',label:'Difficile',interval:'1 jour'}, {id:'good',label:'Bien',interval:'3 jours'}, {id:'easy',label:'Facile',interval:'7 jours'}];
-export function ItalianoApp({initialPage:page='today',lessonId,sessionId,occurrenceId,attemptId,reviewMode,suggestedPractice}:{
- initialPage?:Page;lessonId?:string;sessionId?:string;occurrenceId?:string;attemptId?:string;reviewMode?:Mode;suggestedPractice?:boolean;
+export function ItalianoApp({initialPage:page='today',lessonId,sessionId,occurrenceId,attemptId,assessmentId,reviewMode,suggestedPractice}:{
+ initialPage?:Page;lessonId?:string;sessionId?:string;occurrenceId?:string;attemptId?:string;assessmentId?:string;reviewMode?:Mode;suggestedPractice?:boolean;
 }) {
   const [data,setData] = useState<Data>(emptyData); const [ready,setReady] = useState(false); const [storageError,setStorageError] = useState(false);
   const [mode,setMode] = useState<Mode>(reviewMode ?? 'due'); const [session,setSession] = useState<string[] | null>(null); const [index,setIndex] = useState(0); const [revealed,setRevealed] = useState(false); const lock = useRef(false);
@@ -70,7 +71,7 @@ export function ItalianoApp({initialPage:page='today',lessonId,sessionId,occurre
   const visible = cards.filter(c => (theme === 'Tous' || c.theme === theme) && normalize(`${c.italian} ${c.french}`).includes(normalize(query)));
   const speak = (c: Card) => { if (!('speechSynthesis' in window) || !('SpeechSynthesisUtterance' in window)) { setAudioMessage('Lecture vocale indisponible dans ce navigateur.'); return; } const voice = speechSynthesis.getVoices().find(v => v.lang.toLowerCase().startsWith('it')); if (!voice) { setAudioMessage('Aucune voix italienne disponible sur cet appareil.'); return; } const utterance = new SpeechSynthesisUtterance(c.italian); utterance.lang='it-IT'; utterance.voice=voice; utterance.onerror=() => setAudioMessage('La lecture vocale a échoué.'); speechSynthesis.cancel(); speechSynthesis.speak(utterance); setAudioMessage(''); };
   const importFile = async (file?: File) => { if (!file) return; try { if (!file.name.toLowerCase().endsWith('.md')) throw new Error('Choisissez un fichier .md.'); const incoming = parseMarkdown(await file.text(),file.name); const added = mergeImported(cards,incoming); const response=await fetch('/api/import',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({imported:added,reviews:{}})}); if(!response.ok) throw new Error('Import impossible.'); setData(d => ({...d,imported:[...d.imported,...added]})); setMessage(`${added.length} expression(s) importée(s), ${incoming.length-added.length} doublon(s) ignoré(s).`); } catch (error) { setMessage(error instanceof Error ? error.message : 'Import impossible.'); } };
-  const activePage = page==='level' || page==='errors' || page==='corrections' || page==='correction' || page==='attempt' ? 'level' :
+  const activePage = page==='level' || page==='assessments' || page==='errors' || page==='corrections' || page==='correction' || page==='attempt' ? 'level' :
     page==='session' || page==='today' ? 'today' : page==='lessons' ? 'lessons' : 'practice';
   return <div className="shell">
    <aside className="sidebar">
@@ -87,6 +88,7 @@ export function ItalianoApp({initialPage:page='today',lessonId,sessionId,occurre
     {page==='lessons' && <Lessons lessonId={lessonId}/>}
     {page==='practice' && <Practice key={suggestedPractice ? 'suggested' : 'standard'} suggested={suggestedPractice}/>}
     {page==='level' && <NotionProgress/>}
+    {page==='assessments' && (assessmentId ? <AssessmentDetail key={assessmentId} id={assessmentId}/> : <Assessments/>)}
     {page==='attempt' && attemptId && <AttemptDetail key={attemptId} attemptId={attemptId}/>}
     {page==='errors' && <ErrorJournal/>}
     {page==='corrections' && <><h1 className="mb-2">Mes corrections</h1><Sessions corrections/></>}

@@ -5,11 +5,11 @@ export const id = z.string().min(1).max(200);
 const common = { instruction: text, weight: z.number().positive().optional(), objective: text.optional() };
 const item = { content: text, explanation: text.optional() };
 const flashcard = z.object({ ...item, answer: z.object({ italian: text, example: text }).strict() }).strict();
-const cloze = z.object({ ...item, answer: z.object({ accepted: z.array(text).min(1).max(20) }).strict() }).strict();
+export const cloze = z.object({ ...item, answer: z.object({ accepted: z.array(text).min(1).max(20) }).strict() }).strict();
 const freeText = z.object({ ...item, answer: z.object({}).strict() }).strict();
 const hintList = z.array(text.max(500)).min(1).max(5);
 const hints = { hints: hintList.optional() };
-const rubric = z.object({ criteria: text, example: text.optional() }).strict();
+export const rubric = z.object({ criteria: text, example: text.optional() }).strict();
 const tokenOrder = z.array(z.number().int().nonnegative()).min(2).max(24);
 export const sentenceSchema = z.discriminatedUnion('format', [
   z.object({ format: z.literal('guided'), hints: hintList, rubric }).strict(),
@@ -26,7 +26,7 @@ export function isTokenOrder(order: number[], count: number) {
   return order.length === count && order.every(index => index < count) && new Set(order).size === count;
 }
 const sentenceItem = z.object({ ...item, sentence: sentenceSchema }).strict();
-const questionnaire = z.object({
+export const questionnaire = z.object({
  ...item,
  choices: z.array(z.object({value:id,label:text}).strict()).min(2).max(8),
  answer: z.object({value:id}).strict(),

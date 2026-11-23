@@ -28,7 +28,7 @@ function publicSentence(definition: SentenceDefinition): Sentence {
  if (definition.format === 'dialogue') return { format: definition.format, turns: definition.turns, hintCount };
  return { format: definition.format, hintCount };
 }
-function sentenceDefinition(item: ItemRow): SentenceDefinition {
+function sentenceDefinition(item: Pick<ItemRow, 'answer_json'>): SentenceDefinition {
  return JSON.parse(item.answer_json) as SentenceDefinition;
 }
 export function teacherItem(item: ItemRow) {
@@ -112,7 +112,8 @@ export function retryReady(d: Database, context: string, scope: string, itemId: 
  const index = rows.findIndex(a => a.id === own[0].id);
  return new Set(rows.slice(index + 1).filter(a => a.item_id !== itemId && (!own[0].reviewed_at || a.submitted_at >= own[0].reviewed_at)).map(a => a.item_id)).size >= 3;
 }
-function gradeSentence(item: ItemRow, response: Answer) {
+type GradableItem = Pick<ItemRow, 'type' | 'answer_json' | 'choices_json' | 'explanation'>;
+function gradeSentence(item: GradableItem, response: Answer) {
  const definition = sentenceDefinition(item);
  if (definition.format === 'word_order') {
   const order = z.array(z.number().int().nonnegative()).parse(response);
@@ -127,7 +128,7 @@ function gradeSentence(item: ItemRow, response: Answer) {
  else rawAnswer.parse(response);
  return { correct:null, status:'pending_teacher', feedback:null };
 }
-export function grade(item: ItemRow, response: Answer, mode: string, practice: boolean) {
+export function grade(item: GradableItem, response: Answer, mode: string, practice: boolean) {
  if (mode !== 'answer' && item.type !== 'flashcard') throw new Error('Mode incompatible.');
  if (item.type === 'sentence') return gradeSentence(item,response);
  const raw = rawAnswer.parse(response), answer = JSON.parse(item.answer_json);

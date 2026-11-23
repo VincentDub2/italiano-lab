@@ -89,6 +89,7 @@ export function NotionProgress() {
  return <>
   <h1 className="mb-4">Mon niveau</h1>
   <div className="mb-7 flex flex-wrap gap-2">
+   <Button asChild variant="outline"><Link href="/mon-niveau/bilans">Bilans</Link></Button>
    <Button asChild variant="outline"><Link href="/mon-niveau/corrections">Voir mes corrections</Link></Button>
    <Button asChild variant="outline"><Link href="/mon-niveau/carnet">Ouvrir le carnet d’erreurs</Link></Button>
   </div>
