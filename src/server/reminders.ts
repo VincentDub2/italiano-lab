@@ -1,11 +1,12 @@
 import { readFile } from 'node:fs/promises';
 import { z } from 'zod';
 
-const defaultSource = '/Users/vincent/.hermes/profiles/prof-italien/revisions.json';
 const date = z.iso.date();
 const schema = z.object({ themes: z.array(z.object({ titre: z.string().trim().min(1), dates: z.record(z.string().regex(/^J\d+$/), date) })) });
 
-export async function readReminders(path = process.env.ITALIANO_REMINDERS_PATH || defaultSource, now = new Date()) {
+export async function readReminders(path = process.env.ITALIANO_REMINDERS_PATH, now = new Date()) {
+  if (!path) return { state: 'missing' as const, reminders: [] };
+
   let raw: string;
   try { raw = await readFile(path, 'utf8'); }
   catch (error) {
