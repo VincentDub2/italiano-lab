@@ -38,4 +38,4 @@ Pour revenir en arrière, arrêter les processus et restaurer ensemble l’ancie
 
 Les QCM historiques stockaient un identifiant de choix en séance et un index en entraînement : les deux valeurs brutes sont conservées et interprétées selon leur snapshot. Les anciens espaces périphériques supprimés par `.trim()` ne peuvent pas être récupérés. Les nouvelles réponses conservent leur saisie brute. L’ancien `elapsed_ms` est conservé sans être interprété comme une durée active individuelle.
 
-Les tests emploient `ITALIANO_DB_PATH` et un serveur isolés. Ne jamais pointer la suite navigateur vers la base personnelle. Voir [le document de conception](REVISION_DESIGN.md), [les changements Hermes séparés](HERMES_BANK_CHANGES.md) et [le bilan](IMPLEMENTATION_REVISION_REPORT.md).
+Les tests emploient `ITALIANO_DB_PATH` et un serveur isolés. Ne jamais pointer la suite navigateur vers la base personnelle. Voir [le document de conception](archive/REVISION_DESIGN.md), [les changements Hermes séparés](HERMES_BANK_CHANGES.md) et [le bilan](archive/IMPLEMENTATION_REVISION_REPORT.md).

@@ -12,7 +12,7 @@ Aujourd’hui, l’app sait déjà recevoir des corrections, réutiliser une ban
 
 ## 2. Contraintes de départ
 
-- Travailler dans le projet existant `/Users/vincent/italiano-lab` : Next.js, shadcn/ui, Tailwind, SQLite local, Zod, MCP. Lire `AGENTS.md`, `docs/PROF_INTEGRATION.md`, `automation/daily-prof-bank.md` et `automation/correct-prof.md`. Vérifier les schémas, migrations et scripts réels avant de choisir les noms définitifs.
+- Travailler dans le projet existant `italiano-lab` : Next.js, shadcn/ui, Tailwind, SQLite local, Zod, MCP. Lire `AGENTS.md`, `docs/PROF_INTEGRATION.md`, `automation/daily-prof-bank.md` et `automation/correct-prof.md`. Vérifier les schémas, migrations et scripts réels avant de choisir les noms définitifs.
 - Réutiliser `submit_feedback`, `get_attempt`, `rectify_feedback`, les notions et items de banque, le rendu et les tentatives de séance. Pas de second moteur de quiz, de second agent ni d’appel LLM depuis Next.js. Aucun nouveau service externe.
 - Toutes les données historiques restent utilisables : séances publiées, cartes, tentatives, corrections, notes de difficulté, progression par item et rappels externes. Réponses API et outils existants compatibles si les nouveaux champs sont omis. Migration SQLite additive et testée sur une base ancienne ; travail et tests sur bases isolées, pas sur la base réelle.
 - Le calendrier externe de `revisions.json` reste en lecture seule. Les nouvelles leçons et leurs jalons ont SQLite comme seule source de vérité ; ne pas recopier les nouvelles échéances dans `revisions.json`. Les échéances thématiques et celles des items sont distinctes : ne pas réinitialiser un item quand on crée une leçon.

@@ -53,9 +53,9 @@ connexion WAL encore ouverte, restauration, répétabilité, échec après `ALTE
 et refus des références invalides.
 
 ```sh
-TMPDIR=/Users/vincent/.hermes/cache/scratch sh scripts/node.sh --import tsx --test tests/availability-migration.test.ts tests/bank-migration.test.ts
-TMPDIR=/Users/vincent/.hermes/cache/scratch npm test
-TMPDIR=/Users/vincent/.hermes/cache/scratch npm run test:mcp
+sh scripts/node.sh --import tsx --test tests/availability-migration.test.ts tests/bank-migration.test.ts
+npm test
+npm run test:mcp
 npx tsc --noEmit --incremental false
 npm run lint
 ```

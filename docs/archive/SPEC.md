@@ -4,7 +4,7 @@
 Application personnelle de révision d'italien pour un francophone vivant à Milan. Next.js App Router + TypeScript + Tailwind + vrais composants shadcn/ui. UI française, contenu italien. Livrer une app exécutable et testée, pas une maquette statique.
 
 ## Limites et sécurité
-Tout travail dans /Users/vincent/italiano-lab. Ne lire/modifier aucun vault Obsidian réel, profil Hermes, secret ou config globale. Pas de cloud, API payante, auth, déploiement, publication ou commit. Les cours de démonstration sont explicitement étiquetés. Ne pas prétendre qu'une synchronisation Obsidian ou une correction IA existe. Import manuel uniquement. Aucune commande destructive hors projet.
+Tout travail dans italiano-lab. Ne lire/modifier aucun vault Obsidian réel, profil Hermes, secret ou config globale. Pas de cloud, API payante, auth, déploiement, publication ou commit. Les cours de démonstration sont explicitement étiquetés. Ne pas prétendre qu'une synchronisation Obsidian ou une correction IA existe. Import manuel uniquement. Aucune commande destructive hors projet.
 
 ## Stack
 Next.js App Router, React, TypeScript strict, Tailwind. Installer les dépendances et utiliser réellement shadcn/ui (Button, Card, Badge, Input, Tabs ou composants adaptés). Lucide pour icônes. Pas de dépendance à Google Fonts à la compilation : polices système. Logique de révision isolée et testable. Aucun backend nécessaire au prototype.

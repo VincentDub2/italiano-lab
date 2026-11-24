@@ -31,7 +31,7 @@ Conception issue de la proposition discutée le 14 novembre 2026. Les règles p�
 
 ## Architecture proposée
 
-Conserver Next.js, SQLite et le serveur MCP existants. Le vocabulaire est défini dans [GLOSSARY.md](../GLOSSARY.md) ; les noms historiques des tables et des champs publics peuvent être conservés pour assurer la compatibilité.
+Conserver Next.js, SQLite et le serveur MCP existants. Le vocabulaire est défini dans [GLOSSARY.md](../../GLOSSARY.md) ; les noms historiques des tables et des champs publics peuvent être conservés pour assurer la compatibilité.
 
 | Élément | Responsabilité |
 | --- | --- |
@@ -147,4 +147,4 @@ Le code distingue déjà les items par leur identifiant et regroupe ceux d’un 
 
 La routine quotidienne documentée dans `automation/daily-prof.md` demande actuellement 32 items pour 20 à 30 minutes. Son adaptation au budget retenu devra être fournie séparément ; aucun profil ni cron Hermes n’est modifié pendant cet entretien.
 
-Fichiers examinés : [schéma et migrations](../src/server/database.mjs), [séances et corrections](../src/server/domain.ts), [entraînement libre](../src/server/practice.ts), [outils professeur](../src/server/mcp.ts), [routes élève](../src/app/api/%5Baction%5D/route.ts). La décision sur l’identité et les versions est conservée dans [ADR 0001](adr/0001-identite-et-historique-des-items.md).
+Fichiers examinés : [schéma et migrations](../../src/server/database.mjs), [séances et corrections](../../src/server/domain.ts), [entraînement libre](../../src/server/practice.ts), [outils professeur](../../src/server/mcp.ts), [routes élève](../../src/app/api/%5Baction%5D/route.ts). La décision sur l’identité et les versions est conservée dans [ADR 0001](../adr/0001-identite-et-historique-des-items.md).
