@@ -2,7 +2,7 @@
 
 Le serveur fournit les outils de séance, de banque et de suivi, ainsi que six outils pour les observations et les leçons proactives. La migration courante est la version 15. Les [contrats V3A](PROF_PROACTIF_V3A.md) décrivent les mini-bilans écrits. Les [contrats V3B](PROF_PROACTIF_V3B.md) décrivent leur comparaison par notion. `list_notion_progress` expose le bilan daté et les preuves admissibles pour les leçons de progression. Le [rapport V1](PROF_PROACTIF_V1.md) décrit les contrats et les étapes d’activation.
 
-Le profil Hermes, ses autorisations d’outils et ses crons n’ont pas été modifiés pendant cette implémentation. Leur état d’exploitation antérieurement documenté n’a pas été revérifié. Appliquer séparément [les changements Hermes](HERMES_BANK_CHANGES.md) et les nouvelles [consignes quotidiennes](../automation/daily-prof-bank.md) avant d’attendre de la routine qu’elle compose ses séances depuis la banque. Le Mac et les services locaux doivent être actifs.
+Le profil Hermes, ses autorisations d’outils et ses crons n’ont pas été modifiés pendant cette implémentation. Leur état d’exploitation antérieurement documenté n’a pas été revérifié. Appliquer séparément [les changements Hermes](HERMES_BANK_CHANGES.md) et les nouvelles [consignes quotidiennes](../automation/daily-prof-bank.md) avant d’attendre de la routine qu’elle compose ses séances depuis la banque. Les services locaux doivent être actifs.
 
 ## Serveur stdio
 
@@ -13,13 +13,15 @@ Le lanceur MCP fixe le répertoire de travail et utilise Node.js 24 avec le modu
   "mcp_servers": {
     "italiano-lab": {
       "command": "/bin/sh",
-      "args": ["/Users/vincent/italiano-lab/scripts/mcp.sh"]
+      "args": ["/absolute/path/to/italiano-lab/scripts/mcp.sh"]
     }
   }
 }
 ```
 
 Ceci est un exemple de configuration Hermes, pas une instruction de modifier manuellement le YAML. Installer via le mécanisme de configuration MCP validé de Hermes dans le profil voulu. Le lanceur utilise Node.js 24 depuis le `PATH` ou le retrouve dans l’installation nvm de l’utilisateur qui exécute Hermes. Si Node 24 est indisponible, il s’arrête avec une erreur explicite. Sans `ITALIANO_DB_PATH`, il utilise la même base `data/italiano.sqlite` que l’application. Pour un test, fournir un chemin SQLite temporaire au lanceur.
+
+Configurer `ITALIANO_APP_URL` dans l’environnement des routines Hermes si l’application écoute ailleurs que sur `http://127.0.0.1:3211`. Pour afficher le calendrier thématique externe, définir `ITALIANO_REMINDERS_PATH` dans l’environnement de l’application ou dans `.env.local`. La routine quotidienne peut aussi recevoir cette variable si elle doit pouvoir lire le fichier quand l’API locale est indisponible. Les chemins et le calendrier restent locaux.
 
 Outils : get_learning_summary, create_session, list_sessions, get_session, publish_session, get_pending_answers, submit_feedback, get_attempt. Pour create_session, fournir requestId stable, title, objective, scheduledDate YYYY-MM-DD et exercises. Les schémas sont découverts via tools/list.
 

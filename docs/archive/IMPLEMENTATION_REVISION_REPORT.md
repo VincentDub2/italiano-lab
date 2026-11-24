@@ -47,7 +47,7 @@ Le test navigateur génère les captures du carnet sur ordinateur et mobile dans
 
 ## Hermes et limites restantes
 
-Les profils, crons et scripts Hermes n’ont pas été modifiés ; aucune notification Discord n’a été envoyée. Les adaptations à appliquer sont dans [HERMES_BANK_CHANGES.md](HERMES_BANK_CHANGES.md), avec les [nouvelles consignes quotidiennes](../automation/daily-prof-bank.md). Leur installation et leur exécution réelle sur Hermes restent à effectuer séparément.
+Les profils, crons et scripts Hermes n’ont pas été modifiés ; aucune notification Discord n’a été envoyée. Les adaptations à appliquer sont dans [HERMES_BANK_CHANGES.md](../HERMES_BANK_CHANGES.md), avec les [nouvelles consignes quotidiennes](../../automation/daily-prof-bank.md). Leur installation et leur exécution réelle sur Hermes restent à effectuer séparément.
 
 Les durées sont des estimations ajustables, pas une mesure du temps actif. L’application ne détecte pas une aide extérieure. Les espaces déjà supprimés des anciennes réponses sont irrécupérables ; leur valeur enregistrée reste intacte. Les doublons historiques sont conservés volontairement et les notions manquantes restent à renseigner par le professeur. Aucun badge automatique de maîtrise d’une notion n’est attribué.
 

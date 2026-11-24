@@ -9,6 +9,7 @@ test('calendrier en lecture seule : dates de Rome, échéances, données absente
   const dir = await mkdtemp(join(tmpdir(), 'italiano-reminders-'));
   const path = join(dir, 'revisions.json');
   try {
+    assert.deepEqual(await readReminders(''), { state: 'missing', reminders: [] });
     assert.equal((await readReminders(path)).state, 'missing');
     const content = JSON.stringify({ themes: [{ titre: 'Thème', dates: { J1: '2026-11-01', J3: '2026-11-02' } }] });
     await writeFile(path, content);

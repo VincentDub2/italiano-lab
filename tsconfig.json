@@ -35,11 +35,7 @@
     "**/*.tsx",
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts",
-    "**/*.mts",
-    ".next-long/types/**/*.ts",
-    ".next-long/dev/types/**/*.ts",
-    ".next-reminder-ui/types/**/*.ts",
-    ".next-reminder-ui/dev/types/**/*.ts"
+    "**/*.mts"
   ],
   "exclude": [
     "node_modules"
